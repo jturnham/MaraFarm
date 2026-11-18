@@ -1,0 +1,169 @@
+local _, MaraFarm = ...
+local Tracking, Loot = MaraFarm.Tracking, MaraFarm.Loot
+local UI = {}
+MaraFarm.UI = UI
+
+local PAGE_SIZE = 12
+local frame, summary, runTotal, heading, previous, nextPage, back
+local rows = {}
+local page, selectedRun = 1, nil
+
+local function Duration(seconds)
+    seconds = math.floor(seconds)
+    return string.format("%d:%02d:%02d", math.floor(seconds / 3600),
+        math.floor(seconds / 60) % 60, seconds % 60)
+end
+
+local function Money(copper)
+    return string.format("%dg %02ds %02dc", math.floor(copper / 10000),
+        math.floor(copper / 100) % 100, copper % 100)
+end
+
+local function VendorTotal(run)
+    local copper, unresolved = Loot.Total(run)
+    local total = Money(copper)
+    if unresolved > 0 then total = total .. " + ?" end
+    return total
+end
+
+local function Text(parent, template, x, y, width)
+    local text = parent:CreateFontString(nil, "OVERLAY", template)
+    text:SetPoint("TOPLEFT", x, y)
+    text:SetWidth(width)
+    text:SetJustifyH("LEFT")
+    text:SetWordWrap(false)
+    return text
+end
+
+local function Button(parent, label, width, x, y, onClick)
+    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    button:SetSize(width, 24)
+    button:SetPoint("BOTTOMLEFT", x, y)
+    button:SetText(label)
+    button:SetScript("OnClick", onClick)
+    return button
+end
+
+local function CreateWindow()
+    frame = CreateFrame("Frame", "MaraFarmWindow", UIParent, "BasicFrameTemplateWithInset")
+    frame:Hide()
+    frame:SetSize(700, 422)
+    frame:SetPoint("CENTER")
+    frame:SetClampedToScreen(true)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame.TitleText:SetText("MaraFarm")
+    tinsert(UISpecialFrames, frame:GetName())
+
+    summary = Text(frame, "GameFontNormal", 20, -34, 660)
+    runTotal = Text(frame, "GameFontHighlight", 20, -55, 660)
+    heading = {}
+    for column, x in ipairs({ 20, 270, 440, 562 }) do
+        local width = ({ 245, 165, 117, 118 })[column]
+        heading[column] = Text(frame, "GameFontNormalSmall", x, -84, width)
+    end
+
+    for i = 1, PAGE_SIZE do
+        local row = CreateFrame("Button", nil, frame)
+        row:SetSize(660, 23)
+        row:SetPoint("TOPLEFT", 20, -101 - (i - 1) * 23)
+        row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+        row.cells = {
+            Text(row, "GameFontHighlightSmall", 0, -4, 245),
+            Text(row, "GameFontHighlightSmall", 250, -4, 165),
+            Text(row, "GameFontHighlightSmall", 420, -4, 117),
+            Text(row, "GameFontHighlightSmall", 542, -4, 118),
+        }
+        row:SetScript("OnClick", function(self)
+            if self.run then
+                selectedRun = self.run
+                page = 1
+                UI.Refresh()
+            end
+        end)
+        rows[i] = row
+    end
+
+    back = Button(frame, "Runs", 86, 20, 15, function()
+        selectedRun, page = nil, 1
+        UI.Refresh()
+    end)
+    previous = Button(frame, "Previous", 86, 497, 15, function()
+        page = page - 1
+        UI.Refresh()
+    end)
+    nextPage = Button(frame, "Next", 86, 589, 15, function()
+        page = page + 1
+        UI.Refresh()
+    end)
+
+    local elapsed = 0
+    frame:SetScript("OnUpdate", function(_, delta)
+        elapsed = elapsed + delta
+        if elapsed >= 1 then
+            elapsed = 0
+            UI.Refresh()
+        end
+    end)
+end
+
+function UI.Refresh()
+    if not frame or not frame:IsShown() then return end
+    local now, tick = GetServerTime(), GetTime()
+    local count, expires = Tracking.Hourly(now)
+    local release = count < 10 and "Slot available"
+        or (expires and "Earliest expiry in " .. Duration(expires - now) or "Expiry pending")
+    summary:SetText(string.format("Estimated hourly use  %d/10  |  %s", count, release))
+
+    local entries = selectedRun and selectedRun.loot or Tracking.character.runs
+    local lastPage = math.max(1, math.ceil(#entries / PAGE_SIZE))
+    page = math.max(1, math.min(page, lastPage))
+    previous:SetEnabled(page > 1)
+    nextPage:SetEnabled(page < lastPage)
+    back:SetShown(selectedRun ~= nil)
+
+    local labels
+    if selectedRun then
+        labels = { "Item", "Quantity", "Vendor / item", "Vendor total" }
+        local _, unresolved = Loot.Total(selectedRun)
+        local status = unresolved > 0 and string.format("  |  %d without a price", unresolved) or ""
+        runTotal:SetText(string.format("%s  |  %d visits  |  %s inside  |  %s vendor%s",
+            selectedRun.name, selectedRun.visits, Duration(Tracking.Duration(selectedRun, tick)),
+            VendorTotal(selectedRun), status))
+    else
+        labels = { "Dungeon", "First entry", "Time inside", "Vendor estimate" }
+        local message = #entries > 0 and "Select a run to view its uncommon and rare loot."
+            or "Enter a dungeon to start tracking."
+        runTotal:SetText(message)
+    end
+    for i, label in ipairs(labels) do heading[i]:SetText(label) end
+
+    for i, row in ipairs(rows) do
+        local index = (page - 1) * PAGE_SIZE + i
+        local entry = entries[selectedRun and index or (#entries - index + 1)]
+        row:SetShown(entry ~= nil)
+        row.run = nil
+        if entry and selectedRun then
+            row.cells[1]:SetText(entry.link)
+            row.cells[2]:SetText(entry.quantity)
+            row.cells[3]:SetText(entry.unitPrice and Money(entry.unitPrice)
+                or (entry.unavailable and "Unavailable" or "Pending"))
+            row.cells[4]:SetText(entry.unitPrice and Money(entry.unitPrice * entry.quantity) or "-")
+        elseif entry then
+            row.run = entry
+            row.cells[1]:SetText(entry.name .. (entry == Tracking.active and "  (active)" or ""))
+            row.cells[2]:SetText(date("%Y-%m-%d %H:%M", entry.entered))
+            row.cells[3]:SetText(Duration(Tracking.Duration(entry, tick)))
+            row.cells[4]:SetText(VendorTotal(entry))
+        end
+    end
+end
+
+function UI.Toggle()
+    if not frame then CreateWindow() end
+    frame:SetShown(not frame:IsShown())
+    UI.Refresh()
+end

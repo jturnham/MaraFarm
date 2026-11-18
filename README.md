@@ -1,6 +1,17 @@
 # MaraFarm
 
-Implementation guide for a World of Warcraft: Forever addon that tracks Maraudon solo farming. This repository contains the design, build sequence, and acceptance checks for the addon.
+MaraFarm is a World of Warcraft: Forever addon for tracking Maraudon solo farming.
+
+## First draft
+
+1. Copy the **MaraFarm** folder into **World of Warcraft/_forever_/Interface/AddOns/**. Confirm that **Interface/AddOns/MaraFarm/MaraFarm.toc** exists, then launch WoW Forever with MaraFarm enabled.
+2. Enter a dungeon and type **/marafarm**. The table shows first entry, time spent inside, and estimated vendor value for the current character's recorded runs. Select a run to see green (uncommon) and blue (rare) loot with quantities, unit prices, and line totals.
+3. When you exit and re-enter the same dungeon, MaraFarm adds the next visit to the existing run. A matching successful reset message makes the next entry a new run. The hourly estimate uses the most recent exit and keeps a slot active while you're inside. The dungeon and difficulty identify the presumed copy, so an unobserved reset or a different group's copy can be merged with the old run. The count covers dungeon runs recorded on the current character.
+4. Relog or reload to save progress. Timing starts when MaraFarm first observes the dungeon and excludes time logged out. Vendor estimates use known sell prices and flag items whose prices have yet to resolve. The draft tracks direct personal loot from readable self-loot messages.
+
+The guide below describes the full project. Nova integration, coin tracking, session management, GPH, and the minimap button are planned.
+
+## Implementation guide
 
 ## 1. Define what the tracker measures
 
