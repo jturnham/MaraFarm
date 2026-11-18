@@ -1,8 +1,13 @@
-# Only the addon and its public README belong at the repository root.
+# Track the addon, README, and its screenshot assets.
 /*
 !/.gitignore
 !/README.md
 !/MaraFarm/
+!/docs/
+/docs/*
+!/docs/screenshots/
+/docs/screenshots/*
+!/docs/screenshots/*.png
 
 # Local game data, build output, editor files, and scratch files at any depth.
 WTF/
