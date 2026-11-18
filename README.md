@@ -14,10 +14,6 @@ A World of Warcraft: Forever addon for tracking Maraudon and other dungeon farms
 
 Install by copying the **MaraFarm** folder into **World of Warcraft/_forever_/Interface/AddOns/**.
 
-## In-game screenshots
-
-The screenshots use synthetic runs, loot, and prices to demonstrate the interface.
-
 ### Earnings charts
 
 Use **`/mf charts`** to compare gold per completed run in the current session or across all sessions. Enter a gold target to estimate how many more runs and how much time it will take at your recorded pace.
