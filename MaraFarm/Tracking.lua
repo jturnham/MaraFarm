@@ -18,6 +18,7 @@ function Tracking.Initialize(db, characterKey)
         for _, run in ipairs(character.runs) do run.session = 1 end
     end
     db.overlay = db.overlay or { enabled = true, vendor = true, lockout = true }
+    if db.overlay.gph == nil then db.overlay.gph = true end
     db.minimap = db.minimap or { enabled = true, angle = 225 }
     Tracking.character = character
     Tracking.active = nil

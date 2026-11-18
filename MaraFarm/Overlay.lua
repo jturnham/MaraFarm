@@ -4,7 +4,8 @@ local Skin = MaraFarm.Skin
 local Overlay = {}
 MaraFarm.Overlay = Overlay
 
-local overlay, options, title, timer, vendor, lockout, vendorLabel, lockoutLabel, previewButton, sessionLabel
+local overlay, options, title, timer, vendor, lockout, gph, vendorLabel, lockoutLabel, gphLabel
+local previewButton, sessionLabel, earnings, earningsIncomplete
 local preview = false
 local checks = {}
 
@@ -52,6 +53,7 @@ local function CreateOverlay()
     timer = Metric("Time inside", 40, Skin.ink)
     vendor, vendorLabel = Metric("Vendor estimate", 60, Skin.gold)
     lockout, lockoutLabel = Metric("Est. hourly lockout", 80, Skin.ink)
+    gph, gphLabel = Metric("Live run GPH", 100, Skin.gold)
 
     local elapsed = 0
     overlay:SetScript("OnUpdate", function(_, delta)
@@ -64,6 +66,14 @@ local function CreateOverlay()
     Position()
 end
 
+local function UpdateGPH(seconds)
+    if seconds <= 0 then
+        gph:SetText("-")
+    else
+        gph:SetText(UI.Money(earnings * 3600 / seconds) .. (earningsIncomplete and " +" or ""))
+    end
+end
+
 function Overlay.Refresh(clockOnly)
     local settings = Overlay.settings
     local run = Tracking.active
@@ -73,8 +83,10 @@ function Overlay.Refresh(clockOnly)
     end
 
     if not overlay then CreateOverlay() end
-    timer:SetText(preview and "0:08:24" or UI.Duration(Tracking.Duration(run, GetTime())))
+    local seconds = preview and 504 or Tracking.Duration(run, GetTime())
+    timer:SetText(UI.Duration(seconds))
     if clockOnly then
+        if settings.gph then UpdateGPH(seconds) end
         if settings.lockout then
             lockout:SetText(string.format("%d / 10", Tracking.Hourly(GetServerTime())))
         end
@@ -101,6 +113,23 @@ function Overlay.Refresh(clockOnly)
         lockoutLabel:SetPoint("TOPLEFT", 13, -bottom)
         local count = preview and 4 or Tracking.Hourly(GetServerTime())
         lockout:SetText(string.format("%d / 10", count))
+        bottom = bottom + 20
+    end
+    gph:SetShown(settings.gph)
+    gphLabel:SetShown(settings.gph)
+    if settings.gph then
+        gph:ClearAllPoints()
+        gph:SetPoint("TOPLEFT", 160, -bottom)
+        gphLabel:ClearAllPoints()
+        gphLabel:SetPoint("TOPLEFT", 13, -bottom)
+        if preview then
+            earnings, earningsIncomplete = 14208, false
+        else
+            local subtotal, pending = MaraFarm.Loot.Total(run)
+            earnings = subtotal + (run.coin or 0)
+            earningsIncomplete = pending > 0 or run.coin == nil or run.coinUnknown or not MaraFarm.Coin.available
+        end
+        UpdateGPH(seconds)
         bottom = bottom + 20
     end
 
@@ -132,14 +161,15 @@ local function Check(label, key, y, settings, refresh)
 end
 
 local function CreateOptions()
-    options = Skin.Window("MaraFarmOptions", "MaraFarm  /  Options", 414, 375)
+    options = Skin.Window("MaraFarmOptions", "MaraFarm  /  Options", 414, 404)
     options:SetFrameStrata("DIALOG")
     Skin.Band(options, 63, 25, 18, Skin.surface)
     Skin.Text(options, "GameFontHighlightSmall", 28, -71, 355, Skin.accent):SetText("Dungeon overlay")
     Check("Show overlay in dungeons", "enabled", -92, Overlay.settings, Overlay.Refresh)
     Check("Show estimated vendor value", "vendor", -121, Overlay.settings, Overlay.Refresh)
     Check("Show estimated hourly lockout count", "lockout", -150, Overlay.settings, Overlay.Refresh)
-    Check("Show minimap button", "enabled", -289, MaraFarm.MapButton.settings, MaraFarm.MapButton.Refresh)
+    Check("Show live run gold per hour", "gph", -179, Overlay.settings, Overlay.Refresh)
+    Check("Show minimap button", "enabled", -318, MaraFarm.MapButton.settings, MaraFarm.MapButton.Refresh)
 
     previewButton = Skin.Button(options, "Preview / move", 152, 20, 159, function()
         preview = not preview
@@ -156,9 +186,9 @@ local function CreateOptions()
     end)
     options:SetScript("OnShow", RefreshOptions)
 
-    Skin.Band(options, 233, 25, 18, Skin.surface)
-    sessionLabel = Skin.Text(options, "GameFontHighlightSmall", 28, -241, 350, Skin.accent)
-    local description = Skin.Text(options, "GameFontHighlightSmall", 20, -271, 374, Skin.muted)
+    Skin.Band(options, 262, 25, 18, Skin.surface)
+    sessionLabel = Skin.Text(options, "GameFontHighlightSmall", 28, -270, 350, Skin.accent)
+    local description = Skin.Text(options, "GameFontHighlightSmall", 20, -300, 374, Skin.muted)
     description:SetText("Run history and hourly lockout entries are kept.")
     Skin.Button(options, "Reset session", 128, 20, 18, function()
         StaticPopup_Show("MARAFARM_NEW_SESSION")
@@ -181,7 +211,6 @@ StaticPopupDialogs.MARAFARM_NEW_SESSION = {
 }
 
 function Overlay.ToggleOptions()
-    MaraFarm.Charts.Dismiss()
     if not options then CreateOptions() end
     options:SetShown(not options:IsShown())
 end

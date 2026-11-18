@@ -9,16 +9,14 @@ local targetBox, targetLabel, apply, paceButton, previous, nextPage
 local tabs, bars, axis = {}, {}, {}
 local mode, overallPace, pageOffset = "session", false, 0
 local sample
-local returnWindow
+local restoreDashboard
 
-local function RestoreWindow()
+local function RestoreDashboard()
     if frame:IsShown() then return end
-    local window = returnWindow
-    returnWindow = nil
-    if not window then return end
-    window:Show()
-    if window == MaraFarmWindow then UI.Refresh() end
-    if window == MaraFarmDashboard then MaraFarm.Dashboard.Refresh() end
+    if not restoreDashboard then return end
+    restoreDashboard = false
+    MaraFarmDashboard:Show()
+    MaraFarm.Dashboard.Refresh()
 end
 
 local function ScaleTop(value)
@@ -96,7 +94,7 @@ local function CreateWindow()
     frame:SetScript("OnHide", function()
         targetBox:ClearFocus()
         -- Escape may still be closing other entries in UISpecialFrames.
-        if returnWindow then C_Timer.After(0, RestoreWindow) end
+        if restoreDashboard then C_Timer.After(0, RestoreDashboard) end
     end)
     apply = Skin.Button(frame, "Apply", 58, 570, 374, ApplyTarget)
     paceButton = Skin.Button(frame, "Session pace", 88, 636, 374, function()
@@ -232,33 +230,45 @@ function Charts.Refresh(reuseSample)
 end
 
 function Charts.Dismiss()
-    returnWindow = nil
+    restoreDashboard = false
     if frame and frame:IsShown() then frame:Hide() end
 end
 
-function Charts.Toggle(opener)
+function Charts.Position()
+    if not frame or not frame:IsShown() then return end
+    local history = MaraFarmWindow
+    local centerX, centerY = UIParent:GetCenter()
+    if not centerX or not centerY then return end
+
+    local x, y
+    if history and history:IsShown() then
+        local left, right = history:GetLeft(), history:GetRight()
+        local _, historyY = history:GetCenter()
+        local screenLeft, screenRight = UIParent:GetLeft(), UIParent:GetRight()
+        if left and right and historyY and screenLeft and screenRight then
+            local halfWidth = frame:GetWidth() / 2
+            x = screenRight - right >= left - screenLeft and (right + 12 + halfWidth) or (left - 12 - halfWidth)
+            y = historyY
+        end
+    elseif restoreDashboard then
+        x, y = MaraFarmDashboard:GetCenter()
+    end
+    if x and y then
+        frame:ClearAllPoints()
+        frame:SetPoint("CENTER", UIParent, "CENTER", x - centerX, y - centerY)
+    end
+end
+
+function Charts.Toggle()
     if not frame then CreateWindow() end
     if frame:IsShown() then
         frame:Hide()
         return
     end
 
-    returnWindow = opener
-    for _, name in ipairs({ "MaraFarmOptions", "MaraFarmDashboard", "MaraFarmWindow" }) do
-        local window = _G[name]
-        if window and window:IsShown() then
-            returnWindow = returnWindow or window
-            window:Hide()
-        end
-    end
-    if returnWindow then
-        local x, y = returnWindow:GetCenter()
-        local centerX, centerY = UIParent:GetCenter()
-        if x and y and centerX and centerY then
-            frame:ClearAllPoints()
-            frame:SetPoint("CENTER", UIParent, "CENTER", x - centerX, y - centerY)
-        end
-    end
+    restoreDashboard = MaraFarmDashboard and MaraFarmDashboard:IsShown()
+    if restoreDashboard then MaraFarmDashboard:Hide() end
     frame:Show()
+    Charts.Position()
     Charts.Refresh()
 end
