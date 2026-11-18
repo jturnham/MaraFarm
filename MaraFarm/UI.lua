@@ -4,9 +4,10 @@ local UI = {}
 MaraFarm.UI = UI
 
 local PAGE_SIZE = 12
-local frame, summary, runTotal, heading, previous, nextPage, back
+local frame, summary, runTotal, heading, previous, nextPage, back, sessionFilter
 local rows = {}
 local page, selectedRun = 1, nil
+local currentSessionOnly = false
 
 local function Duration(seconds)
     seconds = math.floor(seconds)
@@ -43,6 +44,11 @@ local function Button(parent, label, width, x, y, onClick)
     button:SetScript("OnClick", onClick)
     return button
 end
+
+UI.Duration = Duration
+UI.VendorTotal = VendorTotal
+UI.Text = Text
+UI.Button = Button
 
 local function CreateWindow()
     frame = CreateFrame("Frame", "MaraFarmWindow", UIParent, "BasicFrameTemplateWithInset")
@@ -91,6 +97,14 @@ local function CreateWindow()
         selectedRun, page = nil, 1
         UI.Refresh()
     end)
+    sessionFilter = Button(frame, "Current session", 125, 20, 15, function()
+        currentSessionOnly = not currentSessionOnly
+        page = 1
+        UI.Refresh()
+    end)
+    Button(frame, "Options", 86, 399, 15, function()
+        MaraFarm.Overlay.ToggleOptions()
+    end)
     previous = Button(frame, "Previous", 86, 497, 15, function()
         page = page - 1
         UI.Refresh()
@@ -119,11 +133,19 @@ function UI.Refresh()
     summary:SetText(string.format("Estimated hourly use  %d/10  |  %s", count, release))
 
     local entries = selectedRun and selectedRun.loot or Tracking.character.runs
+    if not selectedRun and currentSessionOnly then
+        entries = {}
+        for _, run in ipairs(Tracking.character.runs) do
+            if run.session == Tracking.character.session then entries[#entries + 1] = run end
+        end
+    end
     local lastPage = math.max(1, math.ceil(#entries / PAGE_SIZE))
     page = math.max(1, math.min(page, lastPage))
     previous:SetEnabled(page > 1)
     nextPage:SetEnabled(page < lastPage)
     back:SetShown(selectedRun ~= nil)
+    sessionFilter:SetShown(selectedRun == nil)
+    sessionFilter:SetText(currentSessionOnly and "All runs" or "Current session")
 
     local labels
     if selectedRun then
@@ -135,9 +157,8 @@ function UI.Refresh()
             VendorTotal(selectedRun), status))
     else
         labels = { "Dungeon", "First entry", "Time inside", "Vendor estimate" }
-        local message = #entries > 0 and "Select a run to view its uncommon and rare loot."
-            or "Enter a dungeon to start tracking."
-        runTotal:SetText(message)
+        local scope = currentSessionOnly and ("Session " .. Tracking.character.session) or "All sessions"
+        runTotal:SetText(string.format("%s  |  %d runs", scope, #entries))
     end
     for i, label in ipairs(labels) do heading[i]:SetText(label) end
 
@@ -160,6 +181,11 @@ function UI.Refresh()
             row.cells[4]:SetText(VendorTotal(entry))
         end
     end
+end
+
+function UI.ShowCurrentSession()
+    currentSessionOnly, selectedRun, page = true, nil, 1
+    UI.Refresh()
 end
 
 function UI.Toggle()

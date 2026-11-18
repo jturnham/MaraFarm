@@ -1,5 +1,7 @@
 # MaraFarm implementation guide
 
+The current addon has a live dungeon overlay and settings. The **Reset session** action starts a session for the next new dungeon copy. The active run and any return to its copy stay in the original session. Use **All runs** in run history to browse earlier runs.
+
 ## 1. Define what the tracker measures
 
 1. Track the estimated rolling hourly lockout across eligible instances. Display slots used, slots remaining out of 10, and the next slot release. The farming view defaults to Maraudon, while other eligible instances still contribute to the lockout.

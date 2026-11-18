@@ -9,6 +9,11 @@ function Tracking.Initialize(db, characterKey)
         character = { runs = {}, copies = {} }
         db.characters[characterKey] = character
     end
+    if not character.session then
+        character.session = 1
+        for _, run in ipairs(character.runs) do run.session = 1 end
+    end
+    db.overlay = db.overlay or { enabled = true, vendor = true, lockout = true }
     Tracking.character = character
     Tracking.active = nil
     Tracking.started = nil
@@ -44,6 +49,7 @@ function Tracking.Observe(instance, now, tick)
             key = instance.key,
             name = instance.name,
             entered = now,
+            session = character.session,
             seconds = 0,
             visits = 0,
             loot = {},
@@ -55,6 +61,11 @@ function Tracking.Observe(instance, now, tick)
     run.visits = run.visits + 1
     Tracking.active = run
     Tracking.started = tick
+end
+
+function Tracking.NewSession()
+    local character = Tracking.character
+    character.session = character.session + 1
 end
 
 function Tracking.Reset(name)

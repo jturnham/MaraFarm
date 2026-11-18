@@ -1,5 +1,6 @@
 local addonName, MaraFarm = ...
 local Tracking, Loot, UI = MaraFarm.Tracking, MaraFarm.Loot, MaraFarm.UI
+local Overlay = MaraFarm.Overlay
 local events = CreateFrame("Frame")
 local characterKey, resetPattern, resetFields
 local zoneRevision = 0
@@ -27,6 +28,7 @@ local function ObserveWorld(revision, retries)
 
     Tracking.Observe(instance, GetServerTime(), GetTime())
     UI.Refresh()
+    Overlay.Refresh()
 end
 
 local function UpdateWorld()
@@ -47,6 +49,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         if MaraFarm.IsSecret(name) or MaraFarm.IsSecret(realm) or not name then return end
         characterKey = (realm and realm ~= "" and realm or GetNormalizedRealmName()) .. ":" .. name
         MaraFarmDB = Tracking.Initialize(MaraFarmDB, characterKey)
+        Overlay.settings = MaraFarmDB.overlay
         Loot.Initialize()
         resetPattern, resetFields = MaraFarm.MessagePattern(INSTANCE_RESET_SUCCESS)
     end
@@ -68,16 +71,23 @@ events:SetScript("OnEvent", function(_, event, ...)
         local message, _, _, _, _, _, _, _, _, _, _, senderGUID = ...
         Loot.Record(Tracking.active, message, senderGUID, UnitGUID("player"))
         UI.Refresh()
+        Overlay.Refresh()
     elseif event == "ITEM_DATA_LOAD_RESULT" then
         local itemID = ...
         if not MaraFarm.IsSecret(itemID) and type(itemID) == "number" then
             Loot.ItemReady(itemID)
             UI.Refresh()
+            Overlay.Refresh()
         end
     end
 end)
 
 SLASH_MARAFARM1 = "/mf"
-SlashCmdList.MARAFARM = function()
-    if characterKey then UI.Toggle() end
+SlashCmdList.MARAFARM = function(message)
+    if not characterKey then return end
+    if (message or ""):match("^%s*options%s*$") then
+        Overlay.ToggleOptions()
+    else
+        UI.Toggle()
+    end
 end
