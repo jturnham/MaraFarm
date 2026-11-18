@@ -4,7 +4,8 @@ A World of Warcraft: Forever addon for tracking Maraudon and other dungeon farms
 
 - Records first entry, visits, and time spent inside each dungeon run.
 - Shows an estimated rolling hourly lockout count out of 10 for the current character.
-- Lists personally looted uncommon and rare items with quantities, estimated vendor prices, and run totals.
+- Open a run and select a boss to see personally looted uncommon and rare drops, unit prices, and vendor subtotals. Unattributed and older loot remains under **Other / unknown source**.
+- Shows a separate hourly count when Nova Instance Tracker 2.32 is loaded, with a shortcut to Nova's log.
 - Shows a live dungeon overlay with time inside, vendor value, and estimated hourly lockouts.
 - Opens settings with **/mf options** or the **Options** button in run history. Use **Preview / move** to drag the overlay, or **Reset session** to start fresh while keeping earlier runs and lockouts.
 

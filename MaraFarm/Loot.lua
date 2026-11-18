@@ -121,6 +121,7 @@ function Loot.Record(run, message, senderGUID, playerGUID)
         itemID = tonumber(link:match("|Hitem:(%d+)")),
         quantity = quantity,
         quality = quality,
+        boss = MaraFarm.Source.Take(run, link, quantity),
     }
     run.loot[#run.loot + 1] = entry
     Loot.Resolve(run, entry, true)

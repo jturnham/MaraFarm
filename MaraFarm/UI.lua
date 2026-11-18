@@ -1,12 +1,14 @@
 local _, MaraFarm = ...
 local Tracking, Loot = MaraFarm.Tracking, MaraFarm.Loot
+local Nova, Source = MaraFarm.Nova, MaraFarm.Source
 local UI = {}
 MaraFarm.UI = UI
 
 local PAGE_SIZE = 12
-local frame, summary, runTotal, heading, previous, nextPage, back, sessionFilter
+local frame, summary, runTotal, heading, previous, nextPage, back, sessionFilter, novaButton
 local rows = {}
 local page, selectedRun = 1, nil
+local selectedSource
 local currentSessionOnly = false
 
 local function Duration(seconds)
@@ -88,13 +90,22 @@ local function CreateWindow()
                 selectedRun = self.run
                 page = 1
                 UI.Refresh()
+            elseif self.source then
+                selectedSource = self.source
+                page = 1
+                UI.Refresh()
             end
         end)
         rows[i] = row
     end
 
     back = Button(frame, "Runs", 86, 20, 15, function()
-        selectedRun, page = nil, 1
+        if selectedSource then
+            selectedSource = nil
+        else
+            selectedRun = nil
+        end
+        page = 1
         UI.Refresh()
     end)
     sessionFilter = Button(frame, "Current session", 125, 20, 15, function()
@@ -105,6 +116,7 @@ local function CreateWindow()
     Button(frame, "Options", 86, 399, 15, function()
         MaraFarm.Overlay.ToggleOptions()
     end)
+    novaButton = Button(frame, "Nova Log", 96, 291, 15, Nova.Open)
     previous = Button(frame, "Previous", 86, 497, 15, function()
         page = page - 1
         UI.Refresh()
@@ -130,9 +142,25 @@ function UI.Refresh()
     local count, expires = Tracking.Hourly(now)
     local release = count < 10 and "Slot available"
         or (expires and "Earliest expiry in " .. Duration(expires - now) or "Expiry pending")
-    summary:SetText(string.format("Estimated hourly use  %d/10  |  %s", count, release))
+    local novaCount, novaScope = Nova.Hourly()
+    local comparison = novaCount and string.format("  |  Nova (%s) %d/10", novaScope, novaCount) or ""
+    summary:SetText(string.format("MaraFarm est.  %d/10  |  %s%s", count, release, comparison))
+    novaButton:SetShown(Nova.CanOpen())
 
-    local entries = selectedRun and selectedRun.loot or Tracking.character.runs
+    local entries = Tracking.character.runs
+    local sourceGroup
+    if selectedRun then
+        entries = Source.Groups(selectedRun)
+        if selectedSource then
+            for _, group in ipairs(entries) do
+                if group.name == selectedSource.name and group.other == selectedSource.other then
+                    sourceGroup = group
+                    break
+                end
+            end
+            entries = sourceGroup and sourceGroup.loot or {}
+        end
+    end
     if not selectedRun and currentSessionOnly then
         entries = {}
         for _, run in ipairs(Tracking.character.runs) do
@@ -144,17 +172,21 @@ function UI.Refresh()
     previous:SetEnabled(page > 1)
     nextPage:SetEnabled(page < lastPage)
     back:SetShown(selectedRun ~= nil)
+    back:SetText(selectedSource and "Sources" or "Runs")
     sessionFilter:SetShown(selectedRun == nil)
     sessionFilter:SetText(currentSessionOnly and "All runs" or "Current session")
 
     local labels
-    if selectedRun then
+    if selectedSource then
         labels = { "Item", "Quantity", "Vendor / item", "Vendor total" }
-        local _, unresolved = Loot.Total(selectedRun)
-        local status = unresolved > 0 and string.format("  |  %d without a price", unresolved) or ""
-        runTotal:SetText(string.format("%s  |  %d visits  |  %s inside  |  %s vendor%s",
+        local detail = sourceGroup and #entries > 0 and ("Vendor estimate  " .. VendorTotal(sourceGroup))
+            or "No tracked drops"
+        runTotal:SetText(selectedSource.name .. "  |  " .. detail)
+    elseif selectedRun then
+        labels = { "Boss / loot source", "Tracked drops", "", "Vendor total" }
+        runTotal:SetText(string.format("%s  |  %d visits  |  %s inside  |  %s",
             selectedRun.name, selectedRun.visits, Duration(Tracking.Duration(selectedRun, tick)),
-            VendorTotal(selectedRun), status))
+            #entries > 0 and VendorTotal(selectedRun) .. " vendor" or "No tracked drops or bosses"))
     else
         labels = { "Dungeon", "First entry", "Time inside", "Vendor estimate" }
         local scope = currentSessionOnly and ("Session " .. Tracking.character.session) or "All sessions"
@@ -166,13 +198,19 @@ function UI.Refresh()
         local index = (page - 1) * PAGE_SIZE + i
         local entry = entries[selectedRun and index or (#entries - index + 1)]
         row:SetShown(entry ~= nil)
-        row.run = nil
-        if entry and selectedRun then
+        row.run, row.source = nil, nil
+        if entry and selectedSource then
             row.cells[1]:SetText(entry.link)
             row.cells[2]:SetText(entry.quantity)
             row.cells[3]:SetText(entry.unitPrice and Money(entry.unitPrice)
                 or (entry.unavailable and "Unavailable" or "Pending"))
             row.cells[4]:SetText(entry.unitPrice and Money(entry.unitPrice * entry.quantity) or "-")
+        elseif entry and selectedRun then
+            row.source = entry
+            row.cells[1]:SetText(entry.name)
+            row.cells[2]:SetText(#entry.loot)
+            row.cells[3]:SetText("")
+            row.cells[4]:SetText(VendorTotal(entry))
         elseif entry then
             row.run = entry
             row.cells[1]:SetText(entry.name .. (entry == Tracking.active and "  (active)" or ""))
@@ -184,7 +222,7 @@ function UI.Refresh()
 end
 
 function UI.ShowCurrentSession()
-    currentSessionOnly, selectedRun, page = true, nil, 1
+    currentSessionOnly, selectedRun, selectedSource, page = true, nil, nil, 1
     UI.Refresh()
 end
 

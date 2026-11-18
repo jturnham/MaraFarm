@@ -1,6 +1,7 @@
 local addonName, MaraFarm = ...
 local Tracking, Loot, UI = MaraFarm.Tracking, MaraFarm.Loot, MaraFarm.UI
 local Overlay = MaraFarm.Overlay
+local Source = MaraFarm.Source
 local events = CreateFrame("Frame")
 local characterKey, resetPattern, resetFields
 local zoneRevision = 0
@@ -26,7 +27,9 @@ local function ObserveWorld(revision, retries)
         instance = { key = mapID .. ":" .. difficulty, name = name }
     end
 
+    local previous = Tracking.active
     Tracking.Observe(instance, GetServerTime(), GetTime())
+    if Tracking.active ~= previous then Source.Clear() end
     UI.Refresh()
     Overlay.Refresh()
 end
@@ -42,6 +45,11 @@ events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("CHAT_MSG_SYSTEM")
 events:RegisterEvent("CHAT_MSG_LOOT")
 events:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+events:RegisterEvent("LOOT_READY")
+events:RegisterEvent("LOOT_OPENED")
+events:RegisterEvent("LOOT_CLOSED")
+events:RegisterEvent("BOSS_KILL")
+events:RegisterEvent("ENCOUNTER_END")
 
 events:SetScript("OnEvent", function(_, event, ...)
     if event == "PLAYER_ENTERING_WORLD" and not characterKey then
@@ -66,6 +74,17 @@ events:SetScript("OnEvent", function(_, event, ...)
             local captures = { message:match(resetPattern) }
             local dungeon = captures[resetFields[1]]
             if dungeon then Tracking.Reset(dungeon) end
+        end
+    elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
+        Source.Capture(Tracking.active)
+        UI.Refresh()
+    elseif event == "LOOT_CLOSED" then
+        Source.Close()
+    elseif event == "BOSS_KILL" or event == "ENCOUNTER_END" then
+        local _, bossName, _, _, success = ...
+        if event == "BOSS_KILL" or (not MaraFarm.IsSecret(success) and success == 1) then
+            Source.RecordBoss(Tracking.active, bossName)
+            UI.Refresh()
         end
     elseif event == "CHAT_MSG_LOOT" then
         local message, _, _, _, _, _, _, _, _, _, _, senderGUID = ...

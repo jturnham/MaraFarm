@@ -2,6 +2,8 @@
 
 The current addon has a live dungeon overlay and settings. The **Reset session** action starts a session for the next new dungeon copy. The active run and any return to its copy stay in the original session. Use **All runs** in run history to browse earlier runs.
 
+Run details now group looted items by boss when the client exposes an identifiable loot source. The first pass recognizes Maraudon NPC IDs and uses readable encounter or boss-unit data where available. Entries with older, ambiguous, or restricted source data remain accessible under **Other / unknown source**. Nova 2.32 supplies a separate comparison count in run history using Nova's configured scope.
+
 ## 1. Define what the tracker measures
 
 1. Track the estimated rolling hourly lockout across eligible instances. Display slots used, slots remaining out of 10, and the next slot release. The farming view defaults to Maraudon, while other eligible instances still contribute to the lockout.
