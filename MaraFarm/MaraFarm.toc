@@ -1,11 +1,12 @@
 ## Interface: 16001
 ## Title: MaraFarm
 ## Notes: Dungeon timing and uncommon, rare, and epic loot vendor estimates for WoW Forever.
-## Version: 0.6.4
+## Version: 0.6.5
 ## SavedVariables: MaraFarmDB
 ## OptionalDeps: NovaInstanceTracker
 
 Tracking.lua
+Dungeons.lua
 Source.lua
 Loot.lua
 Coin.lua

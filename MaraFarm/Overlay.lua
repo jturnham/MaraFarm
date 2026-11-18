@@ -1,6 +1,7 @@
 local _, MaraFarm = ...
 local UI, Tracking = MaraFarm.UI, MaraFarm.Tracking
 local Skin = MaraFarm.Skin
+local Dungeons = MaraFarm.Dungeons
 local Overlay = {}
 MaraFarm.Overlay = Overlay
 
@@ -8,6 +9,9 @@ local overlay, options, title, timer, vendor, lockout, gph, vendorLabel, lockout
 local previewButton, sessionLabel, earnings, earningsIncomplete
 local preview = false
 local checks = {}
+local dungeonWindow, dungeonEntries, dungeonMaster, dungeonPageText, dungeonPrevious, dungeonNext
+local dungeonRows = {}
+local dungeonPage, DUNGEONS_PER_PAGE = 1, 9
 
 local function Position()
     overlay:ClearAllPoints()
@@ -77,7 +81,7 @@ end
 function Overlay.Refresh(clockOnly)
     local settings = Overlay.settings
     local run = Tracking.active
-    if not settings or not (preview or (settings.enabled and run)) then
+    if not settings or not (preview or (settings.enabled and run and Dungeons.IsEnabled(Dungeons.MapID(run)))) then
         if overlay then overlay:Hide() end
         return
     end
@@ -137,6 +141,86 @@ function Overlay.Refresh(clockOnly)
     overlay:Show()
 end
 
+local function RefreshDungeonRows()
+    local pages = math.max(1, math.ceil(#dungeonEntries / DUNGEONS_PER_PAGE))
+    dungeonPage = math.max(1, math.min(dungeonPage, pages))
+    dungeonMaster:SetChecked(Overlay.settings.enabled)
+    for i, row in ipairs(dungeonRows) do
+        local entry = dungeonEntries[(dungeonPage - 1) * DUNGEONS_PER_PAGE + i]
+        row:SetShown(entry ~= nil)
+        if entry then
+            row.mapID = entry.id
+            row.label:SetText(entry.name)
+            row:SetChecked(Dungeons.IsEnabled(entry.id))
+        end
+    end
+    dungeonPageText:SetText(string.format("%d / %d", dungeonPage, pages))
+    dungeonPrevious:SetEnabled(dungeonPage > 1)
+    dungeonNext:SetEnabled(dungeonPage < pages)
+end
+
+function Overlay.RememberDungeon(run)
+    if Dungeons.Remember(run) and dungeonWindow and dungeonWindow:IsShown() then
+        dungeonEntries = Dungeons.List()
+        RefreshDungeonRows()
+    end
+end
+
+local function DungeonCheck(parent, y, labelWidth, onClick)
+    local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    check:SetPoint("TOPLEFT", 14, y)
+    check:SetHitRectInsets(0, -labelWidth, 0, 0)
+    check.label = Skin.Text(check, "GameFontHighlight", 31, -9, labelWidth)
+    check:SetScript("OnClick", onClick)
+    return check
+end
+
+local function CreateDungeonWindow()
+    dungeonWindow = Skin.Window("MaraFarmDungeonOverlayOptions", "MaraFarm  /  Dungeon overlay", 414, 407)
+    dungeonWindow:SetParent(options)
+    dungeonWindow:SetFrameStrata("DIALOG")
+    dungeonWindow:SetFrameLevel(options:GetFrameLevel() + 5)
+    dungeonMaster = DungeonCheck(dungeonWindow, -59, 164, function(self)
+        Overlay.settings.enabled = not not self:GetChecked()
+        Overlay.Refresh()
+    end)
+    dungeonMaster.label:SetText("Enable overlay")
+    local function SelectAll(enabled)
+        Dungeons.SetAll(enabled)
+        RefreshDungeonRows()
+        Overlay.Refresh()
+    end
+    Skin.Button(dungeonWindow, "Select all", 78, 222, 320, function() SelectAll(true) end)
+    Skin.Button(dungeonWindow, "Clear all", 78, 309, 320, function() SelectAll(false) end)
+    Skin.Band(dungeonWindow, 94, 1, 18, Skin.line)
+    for i = 1, DUNGEONS_PER_PAGE do
+        dungeonRows[i] = DungeonCheck(dungeonWindow, -102 - (i - 1) * 28, 322, function(self)
+            Dungeons.SetEnabled(self.mapID, not not self:GetChecked())
+            Overlay.Refresh()
+        end)
+    end
+    dungeonPageText = Skin.Text(dungeonWindow, "GameFontHighlightSmall", 176, -369, 62, Skin.muted, "CENTER")
+    dungeonPrevious = Skin.Button(dungeonWindow, "Previous", 84, 86, 22, function()
+        dungeonPage = dungeonPage - 1
+        RefreshDungeonRows()
+    end)
+    dungeonNext = Skin.Button(dungeonWindow, "Next", 84, 244, 22, function()
+        dungeonPage = dungeonPage + 1
+        RefreshDungeonRows()
+    end)
+end
+
+local function ToggleDungeonWindow()
+    if not dungeonWindow then CreateDungeonWindow() end
+    if dungeonWindow:IsShown() then
+        dungeonWindow:Hide()
+    else
+        dungeonEntries = Dungeons.List()
+        RefreshDungeonRows()
+        dungeonWindow:Show()
+    end
+end
+
 local function RefreshOptions()
     if not options or not options:IsShown() then return end
     for _, check in ipairs(checks) do
@@ -165,7 +249,7 @@ local function CreateOptions()
     options:SetFrameStrata("DIALOG")
     Skin.Band(options, 63, 25, 18, Skin.surface)
     Skin.Text(options, "GameFontHighlightSmall", 28, -71, 355, Skin.accent):SetText("Dungeon overlay")
-    Check("Show overlay in dungeons", "enabled", -92, Overlay.settings, Overlay.Refresh)
+    Skin.Button(options, "Show overlay in dungeons  >", 374, 20, 285, ToggleDungeonWindow, true)
     Check("Show estimated vendor value", "vendor", -121, Overlay.settings, Overlay.Refresh)
     Check("Show estimated hourly lockout count", "lockout", -150, Overlay.settings, Overlay.Refresh)
     Check("Show live run gold per hour", "gph", -179, Overlay.settings, Overlay.Refresh)
@@ -181,6 +265,7 @@ local function CreateOptions()
         if overlay then Position() end
     end)
     options:SetScript("OnHide", function()
+        if dungeonWindow then dungeonWindow:Hide() end
         preview = false
         Overlay.Refresh()
     end)

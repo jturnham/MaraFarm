@@ -50,7 +50,12 @@ local function ObserveWorld(revision, retries)
     Tracking.Observe(instance, GetServerTime(), GetTime(), initialWorld, reloading)
     initialWorld, reloading = nil, nil
     if Tracking.active ~= previous then
-        if Tracking.active then Source.Clear() else Source.Close() end
+        if Tracking.active then
+            Source.Clear()
+            Overlay.RememberDungeon(Tracking.active)
+        else
+            Source.Close()
+        end
         QueueRefresh(true)
     end
 end
@@ -81,6 +86,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         characterKey = (realm and realm ~= "" and realm or GetNormalizedRealmName()) .. ":" .. name
         MaraFarmDB = Tracking.Initialize(MaraFarmDB, characterKey)
         Overlay.settings = MaraFarmDB.overlay
+        MaraFarm.Dungeons.Initialize(Overlay.settings, Tracking.character.runs)
         MaraFarm.MapButton.settings = MaraFarmDB.minimap
         MaraFarm.MapButton.Refresh()
         Loot.Initialize()
