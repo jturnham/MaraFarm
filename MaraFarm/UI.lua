@@ -1,11 +1,13 @@
 local _, MaraFarm = ...
 local Tracking, Loot = MaraFarm.Tracking, MaraFarm.Loot
 local Nova, Source = MaraFarm.Nova, MaraFarm.Source
+local Skin = MaraFarm.Skin
 local UI = {}
 MaraFarm.UI = UI
 
 local PAGE_SIZE = 12
 local frame, summary, runTotal, heading, previous, nextPage, back, sessionFilter, novaButton
+local pageText, empty
 local rows = {}
 local page, selectedRun = 1, nil
 local selectedSource
@@ -30,62 +32,47 @@ local function VendorTotal(run)
     return total
 end
 
-local function Text(parent, template, x, y, width)
-    local text = parent:CreateFontString(nil, "OVERLAY", template)
-    text:SetPoint("TOPLEFT", x, y)
-    text:SetWidth(width)
-    text:SetJustifyH("LEFT")
-    text:SetWordWrap(false)
-    return text
-end
-
-local function Button(parent, label, width, x, y, onClick)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    button:SetSize(width, 24)
-    button:SetPoint("BOTTOMLEFT", x, y)
-    button:SetText(label)
-    button:SetScript("OnClick", onClick)
-    return button
-end
+local Text, Button = Skin.Text, Skin.Button
 
 UI.Duration = Duration
 UI.VendorTotal = VendorTotal
-UI.Text = Text
-UI.Button = Button
 
 local function CreateWindow()
-    frame = CreateFrame("Frame", "MaraFarmWindow", UIParent, "BasicFrameTemplateWithInset")
-    frame:Hide()
-    frame:SetSize(700, 422)
-    frame:SetPoint("CENTER")
-    frame:SetClampedToScreen(true)
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-    frame.TitleText:SetText("MaraFarm")
-    tinsert(UISpecialFrames, frame:GetName())
-
-    summary = Text(frame, "GameFontNormal", 20, -34, 660)
-    runTotal = Text(frame, "GameFontHighlight", 20, -55, 660)
+    frame = Skin.Window("MaraFarmWindow", "MaraFarm  /  Run history", 740, 498)
+    Skin.Band(frame, 63, 33, 18, Skin.surface)
+    Skin.Band(frame, 132, 27, 18, Skin.surface)
+    Skin.Band(frame, 452, 1, 18, Skin.line)
+    summary = Text(frame, "GameFontHighlight", 30, -73, 680, Skin.accent)
+    runTotal = Text(frame, "GameFontHighlight", 20, -110, 700)
+    empty = Text(frame, "GameFontHighlight", 20, -207, 700, Skin.muted, "CENTER")
+    pageText = Text(frame, "GameFontHighlightSmall", 581, -472, 58, Skin.muted, "CENTER")
     heading = {}
-    for column, x in ipairs({ 20, 270, 440, 562 }) do
-        local width = ({ 245, 165, 117, 118 })[column]
-        heading[column] = Text(frame, "GameFontNormalSmall", x, -84, width)
+    local columns = {
+        { 12, 246, "LEFT" },
+        { 274, 139, "LEFT" },
+        { 424, 121, "RIGHT" },
+        { 558, 116, "RIGHT" },
+    }
+    for column, layout in ipairs(columns) do
+        heading[column] = Text(frame, "GameFontHighlightSmall", 18 + layout[1], -141,
+            layout[2], Skin.muted, layout[3])
     end
 
     for i = 1, PAGE_SIZE do
         local row = CreateFrame("Button", nil, frame)
-        row:SetSize(660, 23)
-        row:SetPoint("TOPLEFT", 20, -101 - (i - 1) * 23)
-        row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-        row.cells = {
-            Text(row, "GameFontHighlightSmall", 0, -4, 245),
-            Text(row, "GameFontHighlightSmall", 250, -4, 165),
-            Text(row, "GameFontHighlightSmall", 420, -4, 117),
-            Text(row, "GameFontHighlightSmall", 542, -4, 118),
-        }
+        row:SetSize(704, 24)
+        row:SetPoint("TOPLEFT", 18, -160 - (i - 1) * 24)
+        if i % 2 == 1 then Skin.Fill(row, "BACKGROUND", Skin.stripe):SetAllPoints() end
+        local highlight = Skin.Fill(row, "HIGHLIGHT", { 0.41, 0.69, 0.63, 0.18 })
+        highlight:SetAllPoints()
+        row:SetHighlightTexture(highlight)
+        row.cells = {}
+        for column, layout in ipairs(columns) do
+            row.cells[column] = Text(row, "GameFontHighlightSmall", layout[1], -7, layout[2],
+                column == 4 and Skin.gold or Skin.ink, layout[3])
+        end
+        row.arrow = Text(row, "GameFontHighlightSmall", 686, -7, 12, Skin.accent)
+        row.arrow:SetText(">")
         row:SetScript("OnClick", function(self)
             if self.run then
                 selectedRun = self.run
@@ -100,7 +87,7 @@ local function CreateWindow()
         rows[i] = row
     end
 
-    back = Button(frame, "Runs", 86, 20, 15, function()
+    back = Button(frame, "Runs", 105, 18, 13, function()
         if selectedSource then
             selectedSource = nil
         else
@@ -108,21 +95,21 @@ local function CreateWindow()
         end
         page = 1
         UI.Refresh()
-    end)
-    sessionFilter = Button(frame, "Current session", 125, 20, 15, function()
+    end, true)
+    sessionFilter = Button(frame, "Current session", 125, 18, 13, function()
         currentSessionOnly = not currentSessionOnly
         page = 1
         UI.Refresh()
     end)
-    Button(frame, "Options", 86, 399, 15, function()
+    Button(frame, "Options", 78, 153, 13, function()
         MaraFarm.Overlay.ToggleOptions()
     end)
-    novaButton = Button(frame, "Nova Log", 96, 291, 15, Nova.Open)
-    previous = Button(frame, "Previous", 86, 497, 15, function()
+    novaButton = Button(frame, "Nova Log", 86, 241, 13, Nova.Open)
+    previous = Button(frame, "Previous", 80, 495, 13, function()
         page = page - 1
         UI.Refresh()
     end)
-    nextPage = Button(frame, "Next", 86, 589, 15, function()
+    nextPage = Button(frame, "Next", 76, 646, 13, function()
         page = page + 1
         UI.Refresh()
     end)
@@ -151,7 +138,7 @@ function UI.Refresh(clockOnly)
         or (expires and "Earliest expiry in " .. Duration(expires - now) or "Expiry pending")
     local novaCount, novaScope = Nova.Hourly(now)
     local comparison = novaCount and string.format("  |  Nova (%s) %d/10", novaScope, novaCount) or ""
-    summary:SetText(string.format("MaraFarm est.  %d/10  |  %s%s", count, release, comparison))
+    summary:SetText(string.format("Hourly lockout estimate  %d / 10  |  %s%s", count, release, comparison))
     if clockOnly then
         local active = Tracking.active
         if active and selectedRun == active and not selectedSource then
@@ -190,22 +177,30 @@ function UI.Refresh(clockOnly)
     end
     local lastPage = math.max(1, math.ceil(#entries / PAGE_SIZE))
     page = math.max(1, math.min(page, lastPage))
+    pageText:SetText(string.format("%d / %d", page, lastPage))
     previous:SetEnabled(page > 1)
     nextPage:SetEnabled(page < lastPage)
     back:SetShown(selectedRun ~= nil)
-    back:SetText(selectedSource and "Sources" or "Runs")
+    back:SetText(selectedSource and "< Loot sources" or "< Run history")
     sessionFilter:SetShown(selectedRun == nil)
     sessionFilter:SetText(currentSessionOnly and "All runs" or "Current session")
+    empty:SetShown(#entries == 0)
+    if #entries == 0 then
+        if selectedRun then
+            empty:SetText(selectedSource and "No tracked drops from this source." or "No bosses or tracked loot recorded.")
+        else
+            empty:SetText("Enter a dungeon to record a run.")
+        end
+    end
 
     local labels
     if selectedSource then
         labels = { "Item", "Quantity", "Vendor / item", "Vendor total" }
-        local detail = sourceGroup and #entries > 0 and ("Vendor estimate  " .. VendorTotal(sourceGroup))
-            or "No tracked drops"
-        runTotal:SetText(selectedSource.name .. "  |  " .. detail)
+        local detail = #entries > 0 and ("  |  Vendor estimate  " .. VendorTotal(sourceGroup)) or ""
+        runTotal:SetText(selectedSource.name .. detail)
     elseif selectedRun then
         labels = { "Boss / loot source", "Tracked drops", "", "Vendor total" }
-        overviewValue = #entries > 0 and VendorTotal(selectedRun) .. " vendor" or "No tracked drops or bosses"
+        overviewValue = VendorTotal(selectedRun) .. " vendor"
         UpdateRunHeading(tick)
     else
         labels = { "Dungeon", "First entry", "Time inside", "Vendor estimate" }
@@ -218,6 +213,8 @@ function UI.Refresh(clockOnly)
         local index = (page - 1) * PAGE_SIZE + i
         local entry = entries[selectedRun and index or (#entries - index + 1)]
         row:SetShown(entry ~= nil)
+        row.arrow:SetShown(selectedSource == nil)
+        row:EnableMouse(selectedSource == nil)
         row.run, row.source = nil, nil
         if entry and selectedSource then
             row.cells[1]:SetText(entry.link)

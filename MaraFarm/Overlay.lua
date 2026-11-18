@@ -1,9 +1,10 @@
 local _, MaraFarm = ...
 local UI, Tracking = MaraFarm.UI, MaraFarm.Tracking
+local Skin = MaraFarm.Skin
 local Overlay = {}
 MaraFarm.Overlay = Overlay
 
-local overlay, options, title, timer, vendor, lockout, previewButton, sessionLabel
+local overlay, options, title, timer, vendor, lockout, vendorLabel, lockoutLabel, previewButton, sessionLabel
 local preview = false
 local checks = {}
 
@@ -20,12 +21,13 @@ end
 local function CreateOverlay()
     overlay = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     overlay:Hide()
-    overlay:SetSize(265, 95)
+    overlay:SetSize(274, 106)
     overlay:SetFrameStrata("MEDIUM")
     overlay:SetClampedToScreen(true)
     overlay:SetMovable(true)
-    overlay:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    overlay:SetBackdropColor(0.05, 0.06, 0.08, 0.88)
+    Skin.Panel(overlay, 0.92)
+    Skin.Band(overlay, 1, 29, 1, Skin.surface)
+    Skin.Band(overlay, 30, 1, 1, Skin.line)
     overlay:RegisterForDrag("LeftButton")
     overlay:SetScript("OnDragStart", function(self)
         if preview then self:StartMoving() end
@@ -41,10 +43,15 @@ local function CreateOverlay()
         end
     end)
 
-    title = UI.Text(overlay, "GameFontNormal", 12, -9, 241)
-    timer = UI.Text(overlay, "GameFontHighlight", 12, -29, 241)
-    vendor = UI.Text(overlay, "GameFontHighlight", 12, -47, 241)
-    lockout = UI.Text(overlay, "GameFontHighlight", 12, -65, 241)
+    title = Skin.Text(overlay, "GameFontHighlight", 13, -9, 248, Skin.accent)
+    local function Metric(label, top, color)
+        local caption = Skin.Text(overlay, "GameFontHighlightSmall", 13, -top, 145, Skin.muted)
+        caption:SetText(label)
+        return Skin.Text(overlay, "GameFontHighlight", 160, -top, 101, color, "RIGHT"), caption
+    end
+    timer = Metric("Time inside", 40, Skin.ink)
+    vendor, vendorLabel = Metric("Vendor estimate", 60, Skin.gold)
+    lockout, lockoutLabel = Metric("Est. hourly lockout", 80, Skin.ink)
 
     local elapsed = 0
     overlay:SetScript("OnUpdate", function(_, delta)
@@ -66,10 +73,10 @@ function Overlay.Refresh(clockOnly)
     end
 
     if not overlay then CreateOverlay() end
-    timer:SetText("Time inside  " .. (preview and "0:08:24" or UI.Duration(Tracking.Duration(run, GetTime()))))
+    timer:SetText(preview and "0:08:24" or UI.Duration(Tracking.Duration(run, GetTime())))
     if clockOnly then
         if settings.lockout then
-            lockout:SetText(string.format("Estimated hourly use  %d/10", Tracking.Hourly(GetServerTime())))
+            lockout:SetText(string.format("%d / 10", Tracking.Hourly(GetServerTime())))
         end
         return
     end
@@ -77,20 +84,24 @@ function Overlay.Refresh(clockOnly)
     overlay:SetFrameStrata(preview and "DIALOG" or "MEDIUM")
     title:SetText(preview and "Preview - drag to move" or run.name)
 
-    local bottom = 47
+    local bottom = 60
     vendor:SetShown(settings.vendor)
+    vendorLabel:SetShown(settings.vendor)
     if settings.vendor then
-        vendor:SetText("Vendor estimate  " .. (preview and "1g 42s 08c" or UI.VendorTotal(run)))
-        bottom = bottom + 18
+        vendor:SetText(preview and "1g 42s 08c" or UI.VendorTotal(run))
+        bottom = bottom + 20
     end
 
     lockout:SetShown(settings.lockout)
+    lockoutLabel:SetShown(settings.lockout)
     if settings.lockout then
         lockout:ClearAllPoints()
-        lockout:SetPoint("TOPLEFT", 12, -bottom)
+        lockout:SetPoint("TOPLEFT", 160, -bottom)
+        lockoutLabel:ClearAllPoints()
+        lockoutLabel:SetPoint("TOPLEFT", 13, -bottom)
         local count = preview and 4 or Tracking.Hourly(GetServerTime())
-        lockout:SetText(string.format("Estimated hourly use  %d/10", count))
-        bottom = bottom + 18
+        lockout:SetText(string.format("%d / 10", count))
+        bottom = bottom + 20
     end
 
     overlay:SetHeight(bottom + 4)
@@ -109,7 +120,7 @@ end
 local function Check(label, key, y)
     local check = CreateFrame("CheckButton", nil, options, "UICheckButtonTemplate")
     check:SetPoint("TOPLEFT", 14, y)
-    local text = UI.Text(check, "GameFontHighlight", 31, -9, 325)
+    local text = Skin.Text(check, "GameFontHighlight", 31, -9, 325)
     text:SetText(label)
     check:SetScript("OnClick", function(self)
         Overlay.settings[key] = not not self:GetChecked()
@@ -119,30 +130,20 @@ local function Check(label, key, y)
 end
 
 local function CreateOptions()
-    options = CreateFrame("Frame", "MaraFarmOptions", UIParent, "BasicFrameTemplateWithInset")
-    options:Hide()
-    options:SetSize(390, 276)
-    options:SetPoint("CENTER")
+    options = Skin.Window("MaraFarmOptions", "MaraFarm  /  Options", 414, 340)
     options:SetFrameStrata("DIALOG")
-    options:SetClampedToScreen(true)
-    options:EnableMouse(true)
-    options:SetMovable(true)
-    options:RegisterForDrag("LeftButton")
-    options:SetScript("OnDragStart", options.StartMoving)
-    options:SetScript("OnDragStop", options.StopMovingOrSizing)
-    options.TitleText:SetText("MaraFarm Options")
-    tinsert(UISpecialFrames, options:GetName())
+    Skin.Band(options, 63, 25, 18, Skin.surface)
+    Skin.Text(options, "GameFontHighlightSmall", 28, -71, 355, Skin.accent):SetText("Dungeon overlay")
+    Check("Show overlay in dungeons", "enabled", -92)
+    Check("Show estimated vendor value", "vendor", -121)
+    Check("Show estimated hourly lockout count", "lockout", -150)
 
-    Check("Show overlay in dungeons", "enabled", -29)
-    Check("Show estimated vendor value", "vendor", -58)
-    Check("Show estimated hourly lockout count", "lockout", -87)
-
-    previewButton = UI.Button(options, "Preview / move", 152, 20, 123, function()
+    previewButton = Skin.Button(options, "Preview / move", 152, 20, 124, function()
         preview = not preview
         Overlay.Refresh()
         RefreshOptions()
-    end)
-    UI.Button(options, "Reset position", 128, 181, 123, function()
+    end, true)
+    Skin.Button(options, "Reset position", 128, 181, 124, function()
         Overlay.settings.x, Overlay.settings.y = nil, nil
         if overlay then Position() end
     end)
@@ -151,10 +152,11 @@ local function CreateOptions()
         Overlay.Refresh()
     end)
 
-    sessionLabel = UI.Text(options, "GameFontNormal", 20, -173, 350)
-    local description = UI.Text(options, "GameFontHighlightSmall", 20, -194, 350)
+    Skin.Band(options, 233, 25, 18, Skin.surface)
+    sessionLabel = Skin.Text(options, "GameFontHighlightSmall", 28, -241, 350, Skin.accent)
+    local description = Skin.Text(options, "GameFontHighlightSmall", 20, -271, 374, Skin.muted)
     description:SetText("Run history and hourly lockout entries are kept.")
-    UI.Button(options, "Reset session", 128, 20, 19, function()
+    Skin.Button(options, "Reset session", 128, 20, 18, function()
         StaticPopup_Show("MARAFARM_NEW_SESSION")
     end)
 end
