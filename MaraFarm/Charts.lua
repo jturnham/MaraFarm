@@ -9,6 +9,17 @@ local targetBox, targetLabel, apply, paceButton, previous, nextPage
 local tabs, bars, axis = {}, {}, {}
 local mode, overallPace, pageOffset = "session", false, 0
 local sample
+local returnWindow
+
+local function RestoreWindow()
+    if frame:IsShown() then return end
+    local window = returnWindow
+    returnWindow = nil
+    if not window then return end
+    window:Show()
+    if window == MaraFarmWindow then UI.Refresh() end
+    if window == MaraFarmDashboard then MaraFarm.Dashboard.Refresh() end
+end
 
 local function ScaleTop(value)
     if value <= 0 then return 10000 end
@@ -82,6 +93,11 @@ local function CreateWindow()
     targetBox:SetText(tostring((MaraFarmDB.chartTarget or 1000000) / 10000))
     targetBox:SetScript("OnEnterPressed", ApplyTarget)
     targetBox:SetScript("OnEscapePressed", targetBox.ClearFocus)
+    frame:SetScript("OnHide", function()
+        targetBox:ClearFocus()
+        -- Escape may still be closing other entries in UISpecialFrames.
+        if returnWindow then C_Timer.After(0, RestoreWindow) end
+    end)
     apply = Skin.Button(frame, "Apply", 58, 570, 374, ApplyTarget)
     paceButton = Skin.Button(frame, "Session pace", 88, 636, 374, function()
         overallPace = not overallPace
@@ -215,8 +231,34 @@ function Charts.Refresh(reuseSample)
             or "Excludes active and partial runs."))
 end
 
-function Charts.Toggle()
+function Charts.Dismiss()
+    returnWindow = nil
+    if frame and frame:IsShown() then frame:Hide() end
+end
+
+function Charts.Toggle(opener)
     if not frame then CreateWindow() end
-    frame:SetShown(not frame:IsShown())
+    if frame:IsShown() then
+        frame:Hide()
+        return
+    end
+
+    returnWindow = opener
+    for _, name in ipairs({ "MaraFarmOptions", "MaraFarmDashboard", "MaraFarmWindow" }) do
+        local window = _G[name]
+        if window and window:IsShown() then
+            returnWindow = returnWindow or window
+            window:Hide()
+        end
+    end
+    if returnWindow then
+        local x, y = returnWindow:GetCenter()
+        local centerX, centerY = UIParent:GetCenter()
+        if x and y and centerX and centerY then
+            frame:ClearAllPoints()
+            frame:SetPoint("CENTER", UIParent, "CENTER", x - centerX, y - centerY)
+        end
+    end
+    frame:Show()
     Charts.Refresh()
 end

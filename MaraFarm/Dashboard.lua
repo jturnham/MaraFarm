@@ -19,7 +19,7 @@ local function CreateWindow()
         mode, page = "lockouts", 1
         Dashboard.Refresh()
     end, true)
-    Skin.Button(frame, "Charts", 82, 274, 258, function() MaraFarm.Charts.Toggle() end, true)
+    Skin.Button(frame, "Charts", 82, 274, 258, function() MaraFarm.Charts.Toggle(frame) end, true)
     status = Skin.Text(frame, "GameFontHighlight", 20, -104, 422, Skin.accent)
     for i = 1, PAGE_SIZE do
         local top = 126 + (i - 1) * 21
@@ -127,6 +127,7 @@ function Dashboard.Refresh(clockOnly)
 end
 
 function Dashboard.Toggle(panel)
+    MaraFarm.Charts.Dismiss()
     if not frame then CreateWindow() end
     if frame:IsShown() and panel == mode then
         frame:Hide()

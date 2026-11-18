@@ -60,7 +60,7 @@ end
 
 local function CreateWindow()
     frame = Skin.Window("MaraFarmWindow", "MaraFarm  /  Run history", 740, 498)
-    local chartsButton = Button(frame, "Charts", 82, 580, 460, function() MaraFarm.Charts.Toggle() end, true)
+    local chartsButton = Button(frame, "Charts", 82, 580, 460, function() MaraFarm.Charts.Toggle(frame) end, true)
     chartsButton:SetFrameLevel(frame:GetFrameLevel() + 3)
     Skin.Band(frame, 63, 33, 18, Skin.surface)
     Skin.Band(frame, 132, 27, 18, Skin.surface)
@@ -285,6 +285,7 @@ function UI.ShowCurrentSession()
 end
 
 function UI.Toggle()
+    MaraFarm.Charts.Dismiss()
     if not frame then CreateWindow() end
     frame:SetShown(not frame:IsShown())
     UI.Refresh()

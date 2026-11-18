@@ -154,6 +154,7 @@ local function CreateOptions()
         preview = false
         Overlay.Refresh()
     end)
+    options:SetScript("OnShow", RefreshOptions)
 
     Skin.Band(options, 233, 25, 18, Skin.surface)
     sessionLabel = Skin.Text(options, "GameFontHighlightSmall", 28, -241, 350, Skin.accent)
@@ -180,7 +181,7 @@ StaticPopupDialogs.MARAFARM_NEW_SESSION = {
 }
 
 function Overlay.ToggleOptions()
+    MaraFarm.Charts.Dismiss()
     if not options then CreateOptions() end
     options:SetShown(not options:IsShown())
-    RefreshOptions()
 end
