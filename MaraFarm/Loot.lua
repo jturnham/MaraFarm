@@ -2,6 +2,14 @@ local _, MaraFarm = ...
 local Loot = {}
 MaraFarm.Loot = Loot
 
+local trackedQualities = {
+    [2] = "1eff00", -- Uncommon
+    [3] = "0070dd", -- Rare
+    [4] = "a335ee", -- Epic
+}
+local qualityByColor = {}
+for quality, color in pairs(trackedQualities) do qualityByColor[color] = quality end
+
 function MaraFarm.IsSecret(value)
     return issecretvalue and issecretvalue(value)
 end
@@ -68,7 +76,7 @@ function Loot.ApplyItemInfo(run, entry, request, quality, price)
         entry.unavailable = true
         return
     end
-    if quality and quality ~= 2 and quality ~= 3 then
+    if quality and not trackedQualities[quality] then
         for i, candidate in ipairs(run.loot) do
             if candidate == entry then table.remove(run.loot, i); break end
         end
@@ -117,11 +125,11 @@ function Loot.Record(run, message, senderGUID, playerGUID)
 
     -- A link's color is a provisional quality when the item cache is cold.
     local color = link:sub(5, 10):lower()
-    local linkQuality = color == "1eff00" and 2 or color == "0070dd" and 3 or nil
+    local linkQuality = qualityByColor[color]
     local _, _, quality, _, _, _, _, _, _, _, price = C_Item.GetItemInfo(link)
     if MaraFarm.IsSecret(quality) then return end
     local recordedQuality = quality or linkQuality
-    if recordedQuality ~= 2 and recordedQuality ~= 3 then return end
+    if not trackedQualities[recordedQuality] then return end
 
     local entry = {
         link = link,
