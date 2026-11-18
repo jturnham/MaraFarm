@@ -60,6 +60,8 @@ end
 
 local function CreateWindow()
     frame = Skin.Window("MaraFarmWindow", "MaraFarm  /  Run history", 740, 498)
+    local chartsButton = Button(frame, "Charts", 82, 580, 460, function() MaraFarm.Charts.Toggle() end, true)
+    chartsButton:SetFrameLevel(frame:GetFrameLevel() + 3)
     Skin.Band(frame, 63, 33, 18, Skin.surface)
     Skin.Band(frame, 132, 27, 18, Skin.surface)
     Skin.Band(frame, 452, 1, 18, Skin.line)
@@ -122,12 +124,14 @@ local function CreateWindow()
         page = 1
         UI.Refresh()
         MaraFarm.Dashboard.Refresh()
+        MaraFarm.Charts.Refresh()
     end)
     dungeonFilter = Button(frame, "All dungeons", 123, 599, 368, function()
         maraudonOnly = not maraudonOnly
         page = 1
         UI.Refresh()
         MaraFarm.Dashboard.Refresh()
+        MaraFarm.Charts.Refresh()
     end)
     Button(frame, "Options", 78, 153, 13, function()
         MaraFarm.Overlay.ToggleOptions()
@@ -277,6 +281,7 @@ end
 function UI.ShowCurrentSession()
     selectedSession, selectedRun, selectedSource, page = Tracking.character.session, nil, nil, 1
     UI.Refresh()
+    MaraFarm.Charts.Refresh()
 end
 
 function UI.Toggle()

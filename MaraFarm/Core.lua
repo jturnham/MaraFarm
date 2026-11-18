@@ -7,8 +7,10 @@ local characterKey, resetPattern, resetFields
 local initialWorld, reloading
 local zoneRevision = 0
 local refreshQueued = false
+local chartRefreshQueued = false
 
-local function QueueRefresh()
+local function QueueRefresh(refreshCharts)
+    chartRefreshQueued = chartRefreshQueued or refreshCharts
     if refreshQueued then return end
     refreshQueued = true
     C_Timer.After(0, function()
@@ -16,6 +18,10 @@ local function QueueRefresh()
         UI.Refresh()
         Overlay.Refresh()
         MaraFarm.Dashboard.Refresh()
+        if chartRefreshQueued then
+            chartRefreshQueued = false
+            MaraFarm.Charts.Refresh()
+        end
     end)
 end
 
@@ -45,7 +51,7 @@ local function ObserveWorld(revision, retries)
     initialWorld, reloading = nil, nil
     if Tracking.active ~= previous then
         if Tracking.active then Source.Clear() else Source.Close() end
-        QueueRefresh()
+        QueueRefresh(true)
     end
 end
 
@@ -121,7 +127,7 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "ITEM_DATA_LOAD_RESULT" then
         local itemID = ...
         if not MaraFarm.IsSecret(itemID) and type(itemID) == "number" and Loot.ItemReady(itemID) then
-            QueueRefresh()
+            QueueRefresh(true)
         end
     end
 end)
@@ -134,6 +140,8 @@ SlashCmdList.MARAFARM = function(message)
         Overlay.ToggleOptions()
     elseif command == "summary" or command == "lockouts" then
         MaraFarm.Dashboard.Toggle(command)
+    elseif command == "charts" then
+        MaraFarm.Charts.Toggle()
     else
         UI.Toggle()
     end
