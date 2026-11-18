@@ -7,11 +7,11 @@ MaraFarm.UI = UI
 
 local PAGE_SIZE = 12
 local frame, summary, runTotal, heading, previous, nextPage, back, sessionFilter, novaButton
-local pageText, empty
+local pageText, empty, dungeonFilter
 local rows = {}
 local page, selectedRun = 1, nil
 local selectedSource
-local currentSessionOnly = false
+local selectedSession, maraudonOnly
 local overviewValue
 
 local function Duration(seconds)
@@ -21,6 +21,7 @@ local function Duration(seconds)
 end
 
 local function Money(copper)
+    copper = math.floor(copper + 0.5)
     return string.format("%dg %02ds %02dc", math.floor(copper / 10000),
         math.floor(copper / 100) % 100, copper % 100)
 end
@@ -35,7 +36,27 @@ end
 local Text, Button = Skin.Text, Skin.Button
 
 UI.Duration = Duration
+UI.Money = Money
 UI.VendorTotal = VendorTotal
+
+function UI.Scope()
+    return selectedSession, maraudonOnly
+end
+
+local function CycleSession()
+    local character = Tracking.character
+    if not selectedSession then
+        selectedSession = character.session
+        return
+    end
+    local previousSession
+    for _, run in ipairs(character.runs) do
+        if run.session < selectedSession and (not previousSession or run.session > previousSession) then
+            previousSession = run.session
+        end
+    end
+    selectedSession = previousSession
+end
 
 local function CreateWindow()
     frame = Skin.Window("MaraFarmWindow", "MaraFarm  /  Run history", 740, 498)
@@ -43,7 +64,7 @@ local function CreateWindow()
     Skin.Band(frame, 132, 27, 18, Skin.surface)
     Skin.Band(frame, 452, 1, 18, Skin.line)
     summary = Text(frame, "GameFontHighlight", 30, -73, 680, Skin.accent)
-    runTotal = Text(frame, "GameFontHighlight", 20, -110, 700)
+    runTotal = Text(frame, "GameFontHighlight", 20, -110, 570)
     empty = Text(frame, "GameFontHighlight", 20, -207, 700, Skin.muted, "CENTER")
     pageText = Text(frame, "GameFontHighlightSmall", 581, -472, 58, Skin.muted, "CENTER")
     heading = {}
@@ -96,15 +117,24 @@ local function CreateWindow()
         page = 1
         UI.Refresh()
     end, true)
-    sessionFilter = Button(frame, "Current session", 125, 18, 13, function()
-        currentSessionOnly = not currentSessionOnly
+    sessionFilter = Button(frame, "Session", 125, 18, 13, function()
+        CycleSession()
         page = 1
         UI.Refresh()
+        MaraFarm.Dashboard.Refresh()
+    end)
+    dungeonFilter = Button(frame, "All dungeons", 123, 599, 368, function()
+        maraudonOnly = not maraudonOnly
+        page = 1
+        UI.Refresh()
+        MaraFarm.Dashboard.Refresh()
     end)
     Button(frame, "Options", 78, 153, 13, function()
         MaraFarm.Overlay.ToggleOptions()
     end)
     novaButton = Button(frame, "Nova Log", 86, 241, 13, Nova.Open)
+    Button(frame, "Summary", 74, 336, 13, function() MaraFarm.Dashboard.Toggle("summary") end)
+    Button(frame, "Lockouts", 74, 416, 13, function() MaraFarm.Dashboard.Toggle("lockouts") end)
     previous = Button(frame, "Previous", 80, 495, 13, function()
         page = page - 1
         UI.Refresh()
@@ -169,10 +199,13 @@ function UI.Refresh(clockOnly)
             entries = sourceGroup and sourceGroup.loot or {}
         end
     end
-    if not selectedRun and currentSessionOnly then
+    if not selectedRun and (selectedSession or maraudonOnly) then
         entries = {}
         for _, run in ipairs(Tracking.character.runs) do
-            if run.session == Tracking.character.session then entries[#entries + 1] = run end
+            if (not selectedSession or run.session == selectedSession)
+                and (not maraudonOnly or Tracking.IsMaraudon(run)) then
+                entries[#entries + 1] = run
+            end
         end
     end
     local lastPage = math.max(1, math.ceil(#entries / PAGE_SIZE))
@@ -183,7 +216,9 @@ function UI.Refresh(clockOnly)
     back:SetShown(selectedRun ~= nil)
     back:SetText(selectedSource and "< Loot sources" or "< Run history")
     sessionFilter:SetShown(selectedRun == nil)
-    sessionFilter:SetText(currentSessionOnly and "All runs" or "Current session")
+    sessionFilter:SetText(selectedSession and ("Session " .. selectedSession .. "  >") or "All sessions  >")
+    dungeonFilter:SetShown(not selectedRun)
+    dungeonFilter:SetText(maraudonOnly and "Maraudon only" or "All dungeons")
     empty:SetShown(#entries == 0)
     if #entries == 0 then
         if selectedRun then
@@ -204,7 +239,7 @@ function UI.Refresh(clockOnly)
         UpdateRunHeading(tick)
     else
         labels = { "Dungeon", "First entry", "Time inside", "Vendor estimate" }
-        local scope = currentSessionOnly and ("Session " .. Tracking.character.session) or "All sessions"
+        local scope = selectedSession and ("Session " .. selectedSession) or "All sessions"
         runTotal:SetText(string.format("%s  |  %d runs", scope, #entries))
     end
     for i, label in ipairs(labels) do heading[i]:SetText(label) end
@@ -230,7 +265,8 @@ function UI.Refresh(clockOnly)
             row.cells[4]:SetText(VendorTotal(entry))
         elseif entry then
             row.run = entry
-            row.cells[1]:SetText(entry.name .. (entry == Tracking.active and "  (active)" or ""))
+            local status = entry == Tracking.active and "  (active)" or entry.partial and "  (partial)" or ""
+            row.cells[1]:SetText(entry.name .. status)
             row.cells[2]:SetText(date("%Y-%m-%d %H:%M", entry.entered))
             row.cells[3]:SetText(Duration(Tracking.Duration(entry, tick)))
             row.cells[4]:SetText(VendorTotal(entry))
@@ -239,7 +275,7 @@ function UI.Refresh(clockOnly)
 end
 
 function UI.ShowCurrentSession()
-    currentSessionOnly, selectedRun, selectedSource, page = true, nil, nil, 1
+    selectedSession, selectedRun, selectedSource, page = Tracking.character.session, nil, nil, 1
     UI.Refresh()
 end
 

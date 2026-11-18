@@ -5,6 +5,7 @@ MaraFarm.Nova = Nova
 local NAME = "NovaInstanceTracker"
 local SUPPORTED_VERSION = "2.32"
 local nextRead, cachedCount, cachedScope = 0, nil, nil
+local cachedExpiry
 
 local function Addon()
     if not C_AddOns or not C_AddOns.IsAddOnLoaded(NAME) or type(NIT) ~= "table" then return end
@@ -12,18 +13,22 @@ local function Addon()
 end
 
 function Nova.Hourly(now)
-    if now < nextRead then return cachedCount, cachedScope end
+    if now < nextRead then return cachedCount, cachedScope, cachedExpiry end
     nextRead = now + 5
-    cachedCount, cachedScope = nil, nil
+    cachedCount, cachedScope, cachedExpiry = nil, nil, nil
     local addon = Addon()
     if not addon or type(addon.getInstanceLockoutInfo) ~= "function" then return end
-    local ok, count = pcall(addon.getInstanceLockoutInfo, addon)
+    local ok, count, _, anchor = pcall(addon.getInstanceLockoutInfo, addon)
     if ok and not MaraFarm.IsSecret(count) and type(count) == "number"
         and count >= 0 and count % 1 == 0 then
         cachedCount = count
         cachedScope = addon.perCharOnly and "character" or "Nova scope"
+        if count >= 10 and not MaraFarm.IsSecret(anchor) and type(anchor) == "number"
+            and anchor > now - 3600 and anchor <= now then
+            cachedExpiry = anchor + 3600
+        end
     end
-    return cachedCount, cachedScope
+    return cachedCount, cachedScope, cachedExpiry
 end
 
 function Nova.CanOpen()

@@ -83,11 +83,17 @@ function Source.Capture(run)
 end
 
 function Source.Close()
-    if snapshot then snapshot.closed = GetTime() end
+    if snapshot and not snapshot.closed then snapshot.closed = GetTime() end
 end
 
 function Source.Clear()
     snapshot = nil
+end
+
+function Source.RunForLateLoot(link, quantity)
+    if not snapshot or not snapshot.closed or GetTime() - snapshot.closed > 1 then return end
+    local candidate = snapshot.items[ItemKey(link)]
+    if candidate and candidate.boss and candidate.quantity >= quantity then return snapshot.run end
 end
 
 function Source.Take(run, link, quantity)

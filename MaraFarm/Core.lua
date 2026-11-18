@@ -1,9 +1,10 @@
 local addonName, MaraFarm = ...
 local Tracking, Loot, UI = MaraFarm.Tracking, MaraFarm.Loot, MaraFarm.UI
 local Overlay = MaraFarm.Overlay
-local Source = MaraFarm.Source
+local Source, Coin = MaraFarm.Source, MaraFarm.Coin
 local events = CreateFrame("Frame")
 local characterKey, resetPattern, resetFields
+local initialWorld, reloading
 local zoneRevision = 0
 local refreshQueued = false
 
@@ -14,6 +15,7 @@ local function QueueRefresh()
         refreshQueued = false
         UI.Refresh()
         Overlay.Refresh()
+        MaraFarm.Dashboard.Refresh()
     end)
 end
 
@@ -39,9 +41,12 @@ local function ObserveWorld(revision, retries)
     end
 
     local previous = Tracking.active
-    Tracking.Observe(instance, GetServerTime(), GetTime())
-    if Tracking.active ~= previous then Source.Clear() end
-    if Tracking.active ~= previous then QueueRefresh() end
+    Tracking.Observe(instance, GetServerTime(), GetTime(), initialWorld, reloading)
+    initialWorld, reloading = nil, nil
+    if Tracking.active ~= previous then
+        if Tracking.active then Source.Clear() else Source.Close() end
+        QueueRefresh()
+    end
 end
 
 local function UpdateWorld()
@@ -53,7 +58,9 @@ events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("CHAT_MSG_SYSTEM")
+events:RegisterEvent("UI_ERROR_MESSAGE")
 events:RegisterEvent("CHAT_MSG_LOOT")
+events:RegisterEvent("CHAT_MSG_MONEY")
 events:RegisterEvent("ITEM_DATA_LOAD_RESULT")
 events:RegisterEvent("LOOT_READY")
 events:RegisterEvent("LOOT_OPENED")
@@ -68,8 +75,13 @@ events:SetScript("OnEvent", function(_, event, ...)
         characterKey = (realm and realm ~= "" and realm or GetNormalizedRealmName()) .. ":" .. name
         MaraFarmDB = Tracking.Initialize(MaraFarmDB, characterKey)
         Overlay.settings = MaraFarmDB.overlay
+        MaraFarm.MapButton.settings = MaraFarmDB.minimap
+        MaraFarm.MapButton.Refresh()
         Loot.Initialize()
+        Coin.Initialize()
         resetPattern, resetFields = MaraFarm.MessagePattern(INSTANCE_RESET_SUCCESS)
+        local _, reload = ...
+        initialWorld, reloading = true, not MaraFarm.IsSecret(reload) and reload == true
     end
     if not characterKey then return end
 
@@ -77,10 +89,17 @@ events:SetScript("OnEvent", function(_, event, ...)
         UpdateWorld()
     elseif event == "PLAYER_LOGOUT" then
         zoneRevision = zoneRevision + 1
-        Tracking.Leave(GetServerTime(), GetTime())
-    elseif event == "CHAT_MSG_SYSTEM" then
-        local message = ...
-        if resetPattern and not MaraFarm.IsSecret(message) and type(message) == "string" then
+        Tracking.Leave(GetServerTime(), GetTime(), true)
+    elseif event == "CHAT_MSG_SYSTEM" or event == "UI_ERROR_MESSAGE" then
+        local message, errorText = ...
+        if event == "UI_ERROR_MESSAGE" then message = errorText end
+        if not MaraFarm.IsSecret(message) and type(message) == "string"
+            and (message == ERR_INSTANCE_LIMIT or message == ERR_TOO_MANY_INSTANCES) then
+            Tracking.serverWarningUntil = GetServerTime() + 3600
+            QueueRefresh()
+        end
+        if event == "CHAT_MSG_SYSTEM" and resetPattern
+            and not MaraFarm.IsSecret(message) and type(message) == "string" then
             local captures = { message:match(resetPattern) }
             local dungeon = captures[resetFields[1]]
             if dungeon then Tracking.Reset(dungeon) end
@@ -97,6 +116,8 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "CHAT_MSG_LOOT" then
         local message, _, _, _, _, _, _, _, _, _, _, senderGUID = ...
         if Loot.Record(Tracking.active, message, senderGUID, UnitGUID("player")) then QueueRefresh() end
+    elseif event == "CHAT_MSG_MONEY" then
+        if Coin.Record(Tracking.active, ...) then QueueRefresh() end
     elseif event == "ITEM_DATA_LOAD_RESULT" then
         local itemID = ...
         if not MaraFarm.IsSecret(itemID) and type(itemID) == "number" and Loot.ItemReady(itemID) then
@@ -108,8 +129,11 @@ end)
 SLASH_MARAFARM1 = "/mf"
 SlashCmdList.MARAFARM = function(message)
     if not characterKey then return end
-    if (message or ""):match("^%s*options%s*$") then
+    local command = (message or ""):match("^%s*(.-)%s*$"):lower()
+    if command == "options" then
         Overlay.ToggleOptions()
+    elseif command == "summary" or command == "lockouts" then
+        MaraFarm.Dashboard.Toggle(command)
     else
         UI.Toggle()
     end

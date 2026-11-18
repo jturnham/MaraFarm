@@ -110,40 +110,43 @@ end
 
 local function RefreshOptions()
     if not options or not options:IsShown() then return end
-    for key, check in pairs(checks) do
-        check:SetChecked(Overlay.settings[key])
+    for _, check in ipairs(checks) do
+        check:SetChecked(check.settings[check.settingKey])
     end
     previewButton:SetText(preview and "Finish positioning" or "Preview / move")
     sessionLabel:SetText("Current session  " .. Tracking.character.session)
 end
 
-local function Check(label, key, y)
+local function Check(label, key, y, settings, refresh)
     local check = CreateFrame("CheckButton", nil, options, "UICheckButtonTemplate")
     check:SetPoint("TOPLEFT", 14, y)
     local text = Skin.Text(check, "GameFontHighlight", 31, -9, 325)
     text:SetText(label)
     check:SetScript("OnClick", function(self)
-        Overlay.settings[key] = not not self:GetChecked()
-        Overlay.Refresh()
+        settings[key] = not not self:GetChecked()
+        refresh()
     end)
-    checks[key] = check
+    check.settings = settings
+    checks[#checks + 1] = check
+    check.settingKey = key
 end
 
 local function CreateOptions()
-    options = Skin.Window("MaraFarmOptions", "MaraFarm  /  Options", 414, 340)
+    options = Skin.Window("MaraFarmOptions", "MaraFarm  /  Options", 414, 375)
     options:SetFrameStrata("DIALOG")
     Skin.Band(options, 63, 25, 18, Skin.surface)
     Skin.Text(options, "GameFontHighlightSmall", 28, -71, 355, Skin.accent):SetText("Dungeon overlay")
-    Check("Show overlay in dungeons", "enabled", -92)
-    Check("Show estimated vendor value", "vendor", -121)
-    Check("Show estimated hourly lockout count", "lockout", -150)
+    Check("Show overlay in dungeons", "enabled", -92, Overlay.settings, Overlay.Refresh)
+    Check("Show estimated vendor value", "vendor", -121, Overlay.settings, Overlay.Refresh)
+    Check("Show estimated hourly lockout count", "lockout", -150, Overlay.settings, Overlay.Refresh)
+    Check("Show minimap button", "enabled", -289, MaraFarm.MapButton.settings, MaraFarm.MapButton.Refresh)
 
-    previewButton = Skin.Button(options, "Preview / move", 152, 20, 124, function()
+    previewButton = Skin.Button(options, "Preview / move", 152, 20, 159, function()
         preview = not preview
         Overlay.Refresh()
         RefreshOptions()
     end, true)
-    Skin.Button(options, "Reset position", 128, 181, 124, function()
+    Skin.Button(options, "Reset position", 128, 181, 159, function()
         Overlay.settings.x, Overlay.settings.y = nil, nil
         if overlay then Position() end
     end)
@@ -171,6 +174,7 @@ StaticPopupDialogs.MARAFARM_NEW_SESSION = {
     OnAccept = function()
         Tracking.NewSession()
         UI.ShowCurrentSession()
+        MaraFarm.Dashboard.Refresh()
         RefreshOptions()
     end,
 }

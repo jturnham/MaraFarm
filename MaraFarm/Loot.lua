@@ -104,7 +104,7 @@ function Loot.ItemReady(itemID)
 end
 
 function Loot.Record(run, message, senderGUID, playerGUID)
-    if not run or MaraFarm.IsSecret(message) or type(message) ~= "string" then return end
+    if MaraFarm.IsSecret(message) or type(message) ~= "string" then return end
     if not MaraFarm.IsSecret(senderGUID) and not MaraFarm.IsSecret(playerGUID)
         and senderGUID and senderGUID ~= "" and playerGUID and senderGUID ~= playerGUID then
         return
@@ -112,6 +112,8 @@ function Loot.Record(run, message, senderGUID, playerGUID)
     local link, quantity = ItemFields(message, Loot.multiple, Loot.multipleFields)
     if not link then link, quantity = ItemFields(message, Loot.single, Loot.singleFields) end
     if not link or quantity < 1 then return end
+    run = run or MaraFarm.Source.RunForLateLoot(link, quantity)
+    if not run then return end
 
     -- A link's color is a provisional quality when the item cache is cold.
     local color = link:sub(5, 10):lower()
