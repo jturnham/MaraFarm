@@ -60,6 +60,10 @@ end
 
 function Loot.Resolve(run, entry, request)
     local _, _, quality, _, _, _, _, _, _, _, price = C_Item.GetItemInfo(entry.link)
+    Loot.ApplyItemInfo(run, entry, request, quality, price)
+end
+
+function Loot.ApplyItemInfo(run, entry, request, quality, price)
     if MaraFarm.IsSecret(quality) or MaraFarm.IsSecret(price) then
         entry.unavailable = true
         return
@@ -96,6 +100,7 @@ function Loot.ItemReady(itemID)
     for _, pending in ipairs(queue) do
         Loot.Resolve(pending.run, pending.entry, false)
     end
+    return true
 end
 
 function Loot.Record(run, message, senderGUID, playerGUID)
@@ -111,20 +116,21 @@ function Loot.Record(run, message, senderGUID, playerGUID)
     -- A link's color is a provisional quality when the item cache is cold.
     local color = link:sub(5, 10):lower()
     local linkQuality = color == "1eff00" and 2 or color == "0070dd" and 3 or nil
-    local _, _, quality = C_Item.GetItemInfo(link)
+    local _, _, quality, _, _, _, _, _, _, _, price = C_Item.GetItemInfo(link)
     if MaraFarm.IsSecret(quality) then return end
-    quality = quality or linkQuality
-    if quality ~= 2 and quality ~= 3 then return end
+    local recordedQuality = quality or linkQuality
+    if recordedQuality ~= 2 and recordedQuality ~= 3 then return end
 
     local entry = {
         link = link,
         itemID = tonumber(link:match("|Hitem:(%d+)")),
         quantity = quantity,
-        quality = quality,
+        quality = recordedQuality,
         boss = MaraFarm.Source.Take(run, link, quantity),
     }
     run.loot[#run.loot + 1] = entry
-    Loot.Resolve(run, entry, true)
+    Loot.ApplyItemInfo(run, entry, true, quality, price)
+    return true
 end
 
 function Loot.Total(run)

@@ -19,7 +19,9 @@ local snapshot
 function Source.RecordBoss(run, name)
     if not run or MaraFarm.IsSecret(name) or type(name) ~= "string" or name == "" then return end
     run.bosses = run.bosses or {}
+    if run.bosses[name] then return end
     run.bosses[name] = true
+    return true
 end
 
 local function BossName(run, ok, guid, _, extraGUID)
@@ -55,12 +57,13 @@ function Source.Capture(run)
     if MaraFarm.IsSecret(count) or type(count) ~= "number" or count < 1 then return end
 
     snapshot = { run = run, items = {} }
+    local changed = false
     for slot = 1, count do
         local key = ItemKey(GetLootSlotLink(slot))
         if key then
             local _, _, quantity = GetLootSlotInfo(slot)
             local boss = BossName(run, pcall(GetLootSourceInfo, slot))
-            Source.RecordBoss(run, boss)
+            if Source.RecordBoss(run, boss) then changed = true end
             local candidate = snapshot.items[key]
             if candidate then
                 -- Identical links from different or unreadable sources are ambiguous.
@@ -76,6 +79,7 @@ function Source.Capture(run)
             end
         end
     end
+    return changed
 end
 
 function Source.Close()

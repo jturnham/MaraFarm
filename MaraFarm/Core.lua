@@ -5,6 +5,17 @@ local Source = MaraFarm.Source
 local events = CreateFrame("Frame")
 local characterKey, resetPattern, resetFields
 local zoneRevision = 0
+local refreshQueued = false
+
+local function QueueRefresh()
+    if refreshQueued then return end
+    refreshQueued = true
+    C_Timer.After(0, function()
+        refreshQueued = false
+        UI.Refresh()
+        Overlay.Refresh()
+    end)
+end
 
 local function ObserveWorld(revision, retries)
     if revision ~= zoneRevision then return end
@@ -30,8 +41,7 @@ local function ObserveWorld(revision, retries)
     local previous = Tracking.active
     Tracking.Observe(instance, GetServerTime(), GetTime())
     if Tracking.active ~= previous then Source.Clear() end
-    UI.Refresh()
-    Overlay.Refresh()
+    if Tracking.active ~= previous then QueueRefresh() end
 end
 
 local function UpdateWorld()
@@ -76,27 +86,21 @@ events:SetScript("OnEvent", function(_, event, ...)
             if dungeon then Tracking.Reset(dungeon) end
         end
     elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
-        Source.Capture(Tracking.active)
-        UI.Refresh()
+        if Source.Capture(Tracking.active) then QueueRefresh() end
     elseif event == "LOOT_CLOSED" then
         Source.Close()
     elseif event == "BOSS_KILL" or event == "ENCOUNTER_END" then
         local _, bossName, _, _, success = ...
         if event == "BOSS_KILL" or (not MaraFarm.IsSecret(success) and success == 1) then
-            Source.RecordBoss(Tracking.active, bossName)
-            UI.Refresh()
+            if Source.RecordBoss(Tracking.active, bossName) then QueueRefresh() end
         end
     elseif event == "CHAT_MSG_LOOT" then
         local message, _, _, _, _, _, _, _, _, _, _, senderGUID = ...
-        Loot.Record(Tracking.active, message, senderGUID, UnitGUID("player"))
-        UI.Refresh()
-        Overlay.Refresh()
+        if Loot.Record(Tracking.active, message, senderGUID, UnitGUID("player")) then QueueRefresh() end
     elseif event == "ITEM_DATA_LOAD_RESULT" then
         local itemID = ...
-        if not MaraFarm.IsSecret(itemID) and type(itemID) == "number" then
-            Loot.ItemReady(itemID)
-            UI.Refresh()
-            Overlay.Refresh()
+        if not MaraFarm.IsSecret(itemID) and type(itemID) == "number" and Loot.ItemReady(itemID) then
+            QueueRefresh()
         end
     end
 end)

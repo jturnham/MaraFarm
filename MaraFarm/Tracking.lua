@@ -17,6 +17,11 @@ function Tracking.Initialize(db, characterKey)
     Tracking.character = character
     Tracking.active = nil
     Tracking.started = nil
+    Tracking.recent = {}
+    local cutoff = GetServerTime() - 3600
+    for _, run in ipairs(character.runs) do
+        if (run.lastExit or run.entered) > cutoff then Tracking.recent[run] = true end
+    end
     return db
 end
 
@@ -59,6 +64,7 @@ function Tracking.Observe(instance, now, tick)
         character.copies[instance.key] = index
     end
     run.visits = run.visits + 1
+    Tracking.recent[run] = true
     Tracking.active = run
     Tracking.started = tick
 end
@@ -79,7 +85,7 @@ end
 
 function Tracking.Hourly(now)
     local count, nextRelease = 0, nil
-    for _, run in ipairs(Tracking.character.runs) do
+    for run in pairs(Tracking.recent) do
         if run == Tracking.active then
             count = count + 1
         else
@@ -87,6 +93,8 @@ function Tracking.Hourly(now)
             if expires > now then
                 count = count + 1
                 nextRelease = math.min(nextRelease or expires, expires)
+            else
+                Tracking.recent[run] = nil
             end
         end
     end

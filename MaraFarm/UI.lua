@@ -10,6 +10,7 @@ local rows = {}
 local page, selectedRun = 1, nil
 local selectedSource
 local currentSessionOnly = false
+local overviewValue
 
 local function Duration(seconds)
     seconds = math.floor(seconds)
@@ -131,20 +132,40 @@ local function CreateWindow()
         elapsed = elapsed + delta
         if elapsed >= 1 then
             elapsed = 0
-            UI.Refresh()
+            UI.Refresh(true)
         end
     end)
 end
 
-function UI.Refresh()
+local function UpdateRunHeading(tick)
+    runTotal:SetText(string.format("%s  |  %d visits  |  %s inside  |  %s",
+        selectedRun.name, selectedRun.visits, Duration(Tracking.Duration(selectedRun, tick)),
+        overviewValue))
+end
+
+function UI.Refresh(clockOnly)
     if not frame or not frame:IsShown() then return end
     local now, tick = GetServerTime(), GetTime()
     local count, expires = Tracking.Hourly(now)
     local release = count < 10 and "Slot available"
         or (expires and "Earliest expiry in " .. Duration(expires - now) or "Expiry pending")
-    local novaCount, novaScope = Nova.Hourly()
+    local novaCount, novaScope = Nova.Hourly(now)
     local comparison = novaCount and string.format("  |  Nova (%s) %d/10", novaScope, novaCount) or ""
     summary:SetText(string.format("MaraFarm est.  %d/10  |  %s%s", count, release, comparison))
+    if clockOnly then
+        local active = Tracking.active
+        if active and selectedRun == active and not selectedSource then
+            UpdateRunHeading(tick)
+        elseif active and not selectedRun then
+            for _, row in ipairs(rows) do
+                if row.run == active then
+                    row.cells[3]:SetText(Duration(Tracking.Duration(active, tick)))
+                    break
+                end
+            end
+        end
+        return
+    end
     novaButton:SetShown(Nova.CanOpen())
 
     local entries = Tracking.character.runs
@@ -184,9 +205,8 @@ function UI.Refresh()
         runTotal:SetText(selectedSource.name .. "  |  " .. detail)
     elseif selectedRun then
         labels = { "Boss / loot source", "Tracked drops", "", "Vendor total" }
-        runTotal:SetText(string.format("%s  |  %d visits  |  %s inside  |  %s",
-            selectedRun.name, selectedRun.visits, Duration(Tracking.Duration(selectedRun, tick)),
-            #entries > 0 and VendorTotal(selectedRun) .. " vendor" or "No tracked drops or bosses"))
+        overviewValue = #entries > 0 and VendorTotal(selectedRun) .. " vendor" or "No tracked drops or bosses"
+        UpdateRunHeading(tick)
     else
         labels = { "Dungeon", "First entry", "Time inside", "Vendor estimate" }
         local scope = currentSessionOnly and ("Session " .. Tracking.character.session) or "All sessions"

@@ -51,13 +51,13 @@ local function CreateOverlay()
         elapsed = elapsed + delta
         if elapsed >= 1 then
             elapsed = 0
-            Overlay.Refresh()
+            if not preview then Overlay.Refresh(true) end
         end
     end)
     Position()
 end
 
-function Overlay.Refresh()
+function Overlay.Refresh(clockOnly)
     local settings = Overlay.settings
     local run = Tracking.active
     if not settings or not (preview or (settings.enabled and run)) then
@@ -66,10 +66,16 @@ function Overlay.Refresh()
     end
 
     if not overlay then CreateOverlay() end
+    timer:SetText("Time inside  " .. (preview and "0:08:24" or UI.Duration(Tracking.Duration(run, GetTime()))))
+    if clockOnly then
+        if settings.lockout then
+            lockout:SetText(string.format("Estimated hourly use  %d/10", Tracking.Hourly(GetServerTime())))
+        end
+        return
+    end
     overlay:EnableMouse(preview)
     overlay:SetFrameStrata(preview and "DIALOG" or "MEDIUM")
     title:SetText(preview and "Preview - drag to move" or run.name)
-    timer:SetText("Time inside  " .. (preview and "0:08:24" or UI.Duration(Tracking.Duration(run, GetTime()))))
 
     local bottom = 47
     vendor:SetShown(settings.vendor)
