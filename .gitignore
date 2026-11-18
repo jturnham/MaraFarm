@@ -1,4 +1,29 @@
-# Local game data and release output
+# Only the addon and its public README belong at the repository root.
+/*
+!/.gitignore
+!/README.md
+!/MaraFarm/
+
+# Local game data, build output, editor files, and scratch files at any depth.
 WTF/
 Logs/
+SavedVariables/
+dist/
+build/
+tmp/
+temp/
+.vscode/
+.idea/
+__pycache__/
 *.zip
+*.log
+*.tmp
+*.bak
+*.swp
+*.pyc
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+.env
+.env.*

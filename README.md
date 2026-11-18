@@ -10,5 +10,3 @@ A World of Warcraft: Forever addon for tracking Maraudon and other dungeon farms
 - Opens settings with **/mf options** or the **Options** button in run history. Use **Preview / move** to drag the overlay, or **Reset session** to start fresh while keeping earlier runs and lockouts.
 
 Install by copying the **MaraFarm** folder into **World of Warcraft/_forever_/Interface/AddOns/**.
-
-See the [implementation guide](IMPLEMENTATION_GUIDE.md) for the design and remaining work.
