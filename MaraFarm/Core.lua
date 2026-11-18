@@ -77,7 +77,7 @@ events:SetScript("OnEvent", function(_, event, ...)
     end
 end)
 
-SLASH_MARAFARM1 = "/marafarm"
+SLASH_MARAFARM1 = "/mf"
 SlashCmdList.MARAFARM = function()
     if characterKey then UI.Toggle() end
 end
