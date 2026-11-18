@@ -2,6 +2,30 @@ local _, MaraFarm = ...
 local MapButton = {}
 MaraFarm.MapButton = MapButton
 local button
+local PRINCESS_THERADRAS_DISPLAY_ID = 12292
+
+local function CreatePortrait()
+    local outerMask = button:CreateMaskTexture()
+    local innerMask = button:CreateMaskTexture()
+    local maskPath = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+    outerMask:SetTexture(maskPath, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    innerMask:SetTexture(maskPath, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    outerMask:SetAllPoints(button)
+    innerMask:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+    innerMask:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+
+    local ring = MaraFarm.Skin.Fill(button, "BACKGROUND", MaraFarm.Skin.gold)
+    ring:SetAllPoints(button)
+    ring:AddMaskTexture(outerMask)
+    local backing = MaraFarm.Skin.Fill(button, "BORDER", MaraFarm.Skin.stripe)
+    backing:SetAllPoints(innerMask)
+    backing:AddMaskTexture(innerMask)
+
+    local portrait = button:CreateTexture(nil, "ARTWORK")
+    portrait:SetAllPoints(innerMask)
+    SetPortraitTextureFromCreatureDisplayID(portrait, PRINCESS_THERADRAS_DISPLAY_ID)
+    portrait:AddMaskTexture(innerMask)
+end
 
 local function Place()
     local angle = math.rad(MapButton.settings.angle)
@@ -22,14 +46,10 @@ end
 
 function MapButton.Refresh()
     if not button then
-        button = CreateFrame("Button", "MaraFarmMinimapButton", Minimap, "BackdropTemplate")
+        button = CreateFrame("Button", "MaraFarmMinimapButton", Minimap)
         button:SetSize(27, 27)
         button:SetFrameStrata("MEDIUM")
-        MaraFarm.Skin.Panel(button)
-        local label = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        label:SetPoint("CENTER")
-        label:SetTextColor(unpack(MaraFarm.Skin.accent))
-        label:SetText("MF")
+        CreatePortrait()
         button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         button:RegisterForDrag("LeftButton")
         button:SetScript("OnDragStart", function(self)
