@@ -42,22 +42,52 @@ function MaraFarm.MessagePattern(format)
     return table.concat(parts), fields
 end
 
-local function ItemFields(message, pattern, fields)
-    if not pattern then return nil end
-    local captures = { message:match(pattern) }
-    local link = captures[fields[1]]
-    if not link or not link:find("^|c%x%x%x%x%x%x%x%x|Hitem:%d+") or not link:find("|h|r$") then
-        return nil
+function Loot.ItemKey(link)
+    if MaraFarm.IsSecret(link) or type(link) ~= "string" then return end
+    local prefix, key, suffix = link:match("^(.-)|H(item:%d+[^|]*)|h[^|]*|h(.*)$")
+    if not key then return end
+    if (prefix == "" and suffix == "") or (suffix == "|r"
+        and (prefix:match("^|c%x%x%x%x%x%x%x%x$") or prefix:match("^|cn[%w_]+:$"))) then
+        return key
     end
-    -- Reject a stack suffix or a second link captured by a single-item format.
-    if link:find("|h|r", 1, true) ~= #link - 3 then return nil end
-    return link, tonumber(captures[fields[2]]) or 1
+end
+
+local function AddFormat(patterns, format, itemField, stackField)
+    local pattern, fields = MaraFarm.MessagePattern(format)
+    if pattern and fields[itemField] then
+        patterns[#patterns + 1] = { pattern = pattern, item = fields[itemField], stack = fields[stackField] }
+    end
+end
+
+local function MatchMessage(message, patterns)
+    for _, format in ipairs(patterns) do
+        local fields = { message:match(format.pattern) }
+        local link = fields[format.item]
+        if Loot.ItemKey(link) then
+            local amount = tonumber(fields[format.stack]) or 1
+            if amount > 0 then return link, amount end
+        end
+    end
+end
+
+function Loot.Parse(message)
+    if MaraFarm.IsSecret(message) or type(message) ~= "string" then return end
+    local link, quantity = MatchMessage(message, Loot.receipts)
+    if link then return link, quantity, "receipt" end
+    link, quantity = MatchMessage(message, Loot.wins)
+    if link then return link, quantity, "win" end
 end
 
 function Loot.Initialize()
     Loot.pending = {}
-    Loot.single, Loot.singleFields = MaraFarm.MessagePattern(LOOT_ITEM_SELF)
-    Loot.multiple, Loot.multipleFields = MaraFarm.MessagePattern(LOOT_ITEM_SELF_MULTIPLE)
+    Loot.receipts, Loot.wins = {}, {}
+    AddFormat(Loot.receipts, LOOT_ITEM_SELF_MULTIPLE, 1, 2)
+    AddFormat(Loot.receipts, LOOT_ITEM_PUSHED_SELF_MULTIPLE, 1, 2)
+    AddFormat(Loot.receipts, LOOT_ITEM_SELF, 1)
+    AddFormat(Loot.receipts, LOOT_ITEM_PUSHED_SELF, 1)
+    AddFormat(Loot.wins, LOOT_ROLL_YOU_WON, 1)
+    AddFormat(Loot.wins, LOOT_ROLL_YOU_WON_NO_SPAM_NEED, 3)
+    AddFormat(Loot.wins, LOOT_ROLL_YOU_WON_NO_SPAM_GREED, 3)
     for _, run in ipairs(MaraFarm.Tracking.character.runs) do
         for i = #run.loot, 1, -1 do
             local entry = run.loot[i]
@@ -83,6 +113,9 @@ function Loot.ApplyItemInfo(run, entry, request, quality, price)
         return
     end
     entry.quality = quality or entry.quality
+    if quality and entry.link:sub(1, 2) == "|H" then
+        entry.link = "|cff" .. trackedQualities[quality] .. entry.link .. "|r"
+    end
     if quality and type(price) == "number" then
         entry.unitPrice = price
         entry.unavailable = nil
@@ -111,36 +144,25 @@ function Loot.ItemReady(itemID)
     return true
 end
 
-function Loot.Record(run, message, senderGUID, playerGUID)
-    if MaraFarm.IsSecret(message) or type(message) ~= "string" then return end
-    if not MaraFarm.IsSecret(senderGUID) and not MaraFarm.IsSecret(playerGUID)
-        and senderGUID and senderGUID ~= "" and playerGUID and senderGUID ~= playerGUID then
-        return
-    end
-    local link, quantity = ItemFields(message, Loot.multiple, Loot.multipleFields)
-    if not link then link, quantity = ItemFields(message, Loot.single, Loot.singleFields) end
-    if not link or quantity < 1 then return end
-    run = run or MaraFarm.Source.RunForLateLoot(link, quantity)
-    if not run then return end
-
+function Loot.RecordItem(run, link, quantity, boss)
     -- A link's color is a provisional quality when the item cache is cold.
     local color = link:sub(5, 10):lower()
-    local linkQuality = qualityByColor[color]
+    local linkQuality = qualityByColor[color] or tonumber(link:match("^|cnIQ(%d+):"))
     local _, _, quality, _, _, _, _, _, _, _, price = C_Item.GetItemInfo(link)
     if MaraFarm.IsSecret(quality) then return end
     local recordedQuality = quality or linkQuality
-    if not trackedQualities[recordedQuality] then return end
+    if recordedQuality and not trackedQualities[recordedQuality] then return end
 
     local entry = {
         link = link,
         itemID = tonumber(link:match("|Hitem:(%d+)")),
         quantity = quantity,
         quality = recordedQuality,
-        boss = MaraFarm.Source.Take(run, link, quantity),
+        boss = boss or MaraFarm.Source.Take(run, link, quantity),
     }
     run.loot[#run.loot + 1] = entry
     Loot.ApplyItemInfo(run, entry, true, quality, price)
-    return true
+    return entry
 end
 
 function Loot.Total(run)

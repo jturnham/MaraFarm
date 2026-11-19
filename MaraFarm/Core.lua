@@ -2,6 +2,7 @@ local addonName, MaraFarm = ...
 local Tracking, Loot, UI = MaraFarm.Tracking, MaraFarm.Loot, MaraFarm.UI
 local Overlay = MaraFarm.Overlay
 local Source, Coin = MaraFarm.Source, MaraFarm.Coin
+local Rolls = MaraFarm.Rolls
 local events = CreateFrame("Frame")
 local characterKey, resetPattern, resetFields
 local initialWorld, reloading
@@ -71,6 +72,12 @@ events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("CHAT_MSG_SYSTEM")
 events:RegisterEvent("UI_ERROR_MESSAGE")
 events:RegisterEvent("CHAT_MSG_LOOT")
+events:RegisterEvent("START_LOOT_ROLL")
+if C_LootHistory and C_LootHistory.GetSortedInfoForDrop
+    and C_LootHistory.GetSortedDropsForEncounter and C_LootHistory.GetLootHistoryTime then
+    events:RegisterEvent("LOOT_HISTORY_UPDATE_DROP")
+    events:RegisterEvent("LOOT_HISTORY_UPDATE_ENCOUNTER")
+end
 events:RegisterEvent("CHAT_MSG_MONEY")
 events:RegisterEvent("ITEM_DATA_LOAD_RESULT")
 events:RegisterEvent("LOOT_READY")
@@ -126,8 +133,13 @@ events:SetScript("OnEvent", function(_, event, ...)
             if Source.RecordBoss(Tracking.active, bossName) then QueueRefresh() end
         end
     elseif event == "CHAT_MSG_LOOT" then
-        local message, _, _, _, _, _, _, _, _, _, _, senderGUID = ...
-        if Loot.Record(Tracking.active, message, senderGUID, UnitGUID("player")) then QueueRefresh() end
+        local run = Rolls.Chat(Tracking.active, ...)
+        if run then QueueRefresh(run ~= Tracking.active) end
+    elseif event == "START_LOOT_ROLL" then
+        Rolls.Start(Tracking.active, ...)
+    elseif event == "LOOT_HISTORY_UPDATE_DROP" or event == "LOOT_HISTORY_UPDATE_ENCOUNTER" then
+        local run = Rolls.History(...)
+        if run then QueueRefresh(run ~= Tracking.active) end
     elseif event == "CHAT_MSG_MONEY" then
         if Coin.Record(Tracking.active, ...) then QueueRefresh() end
     elseif event == "ITEM_DATA_LOAD_RESULT" then
