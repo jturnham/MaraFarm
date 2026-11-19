@@ -4,6 +4,8 @@ This file records user-facing changes by GitHub release tag.
 
 ## Unreleased
 
+## [0.7.1](https://github.com/jturnham/MaraFarm/releases/tag/v0.7.1) · 2026-11-19
+
 ### Fixed
 
 - Distinguishes more fresh dungeon copies after resets. A locally requested reset without a readable result is marked provisional, and fighting a previously defeated boss after re-entry separates the new run.
