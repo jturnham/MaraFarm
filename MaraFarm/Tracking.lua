@@ -99,6 +99,7 @@ function Tracking.Observe(instance, now, tick, initial, reload)
     end
     if not (reload and suspendedKey == instance.key) then
         run.visits = run.visits + 1
+        run.visitSession = character.session
         if initial then run.partial = true end
     end
     run.suspendedAt = nil
@@ -146,7 +147,9 @@ function Tracking.ObserveBoss(name, defeated)
     if prior and prior < run.visits then
         -- This visit belongs to a new copy. Keep the old run and its exit anchor.
         run.visits = run.visits - 1
+        local visitSession = run.visitSession or run.session
         run = NewRun(run, Tracking.visitEntered, false)
+        run.session, run.visitSession = visitSession, visitSession
         run.visits = 1
         Tracking.active = run
         Tracking.recent[run] = true

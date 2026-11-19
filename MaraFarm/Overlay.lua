@@ -281,7 +281,7 @@ local function CreateOptions()
 end
 
 StaticPopupDialogs.MARAFARM_NEW_SESSION = {
-    text = "Start a new MaraFarm session? The next new dungeon run starts the session. Existing runs and hourly lockout entries are kept.",
+    text = "Start a new MaraFarm session? The next fresh dungeon copy goes into the new session. Any current run, past runs, and hourly lockouts are kept.",
     button1 = "Start new session",
     button2 = CANCEL,
     timeout = 0,

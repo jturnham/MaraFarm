@@ -11,7 +11,7 @@ local pageText, empty, dungeonFilter
 local rows = {}
 local page, selectedRun = 1, nil
 local selectedSource
-local selectedSession, maraudonOnly
+local selectedSession, maraudonOnly = "current", nil
 local overviewValue
 
 local function Duration(seconds)
@@ -40,18 +40,20 @@ UI.Money = Money
 UI.VendorTotal = VendorTotal
 
 function UI.Scope()
+    if selectedSession == "current" then return Tracking.character.session, maraudonOnly end
     return selectedSession, maraudonOnly
 end
 
 local function CycleSession()
     local character = Tracking.character
     if not selectedSession then
-        selectedSession = character.session
+        selectedSession = "current"
         return
     end
+    local session = UI.Scope()
     local previousSession
     for _, run in ipairs(character.runs) do
-        if run.session < selectedSession and (not previousSession or run.session > previousSession) then
+        if run.session < session and (not previousSession or run.session > previousSession) then
             previousSession = run.session
         end
     end
@@ -203,10 +205,11 @@ function UI.Refresh(clockOnly)
             entries = sourceGroup and sourceGroup.loot or {}
         end
     end
-    if not selectedRun and (selectedSession or maraudonOnly) then
+    local session = UI.Scope()
+    if not selectedRun and (session or maraudonOnly) then
         entries = {}
         for _, run in ipairs(Tracking.character.runs) do
-            if (not selectedSession or run.session == selectedSession)
+            if (not session or run.session == session)
                 and (not maraudonOnly or Tracking.IsMaraudon(run)) then
                 entries[#entries + 1] = run
             end
@@ -220,15 +223,19 @@ function UI.Refresh(clockOnly)
     back:SetShown(selectedRun ~= nil)
     back:SetText(selectedSource and "< Loot sources" or "< Run history")
     sessionFilter:SetShown(selectedRun == nil)
-    sessionFilter:SetText(selectedSession and ("Session " .. selectedSession .. "  >") or "All sessions  >")
+    local scope = session and (selectedSession == "current" and "Current session" or "Session " .. session)
+        or "All sessions"
+    sessionFilter:SetText(scope .. "  >")
     dungeonFilter:SetShown(not selectedRun)
     dungeonFilter:SetText(maraudonOnly and "Maraudon only" or "All dungeons")
     empty:SetShown(#entries == 0)
     if #entries == 0 then
         if selectedRun then
             empty:SetText(selectedSource and "No tracked drops from this source." or "No bosses or tracked loot recorded.")
+        elseif selectedSession == "current" and Tracking.active and Tracking.active.session ~= session then
+            empty:SetText("The current dungeon stays in its earlier session. A fresh copy starts here.")
         else
-            empty:SetText("Enter a dungeon to record a run.")
+            empty:SetText("No runs match this view yet.")
         end
     end
 
@@ -243,8 +250,8 @@ function UI.Refresh(clockOnly)
         UpdateRunHeading(tick)
     else
         labels = { "Dungeon", "First entry", "Time inside", "Vendor estimate" }
-        local scope = selectedSession and ("Session " .. selectedSession) or "All sessions"
-        runTotal:SetText(string.format("%s  |  %d runs", scope, #entries))
+        local label = selectedSession == "current" and ("Session " .. session .. " (current)") or scope
+        runTotal:SetText(string.format("%s  |  %d runs", label, #entries))
     end
     for i, label in ipairs(labels) do heading[i]:SetText(label) end
 
@@ -279,7 +286,7 @@ function UI.Refresh(clockOnly)
 end
 
 function UI.ShowCurrentSession()
-    selectedSession, selectedRun, selectedSource, page = Tracking.character.session, nil, nil, 1
+    selectedSession, selectedRun, selectedSource, page = "current", nil, nil, 1
     UI.Refresh()
     MaraFarm.Charts.Refresh()
 end

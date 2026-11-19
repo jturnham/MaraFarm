@@ -4,6 +4,11 @@ This file records user-facing changes by GitHub release tag.
 
 ## Unreleased
 
+### Fixed
+
+- Run History and the farm summary default to the current session after reload. Resetting selects the new session without changing older runs or hourly lockouts.
+- A dungeon copy identified after its first encounter stays in the session that was current when you entered.
+
 ## [0.7.1](https://github.com/jturnham/MaraFarm/releases/tag/v0.7.1) · 2026-11-19
 
 ### Fixed
