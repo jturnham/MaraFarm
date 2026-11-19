@@ -13,7 +13,13 @@ A World of Warcraft: Forever addon for tracking Maraudon and other dungeon farms
 - Opens settings with **/mf options** or the **Options** button in run history. Use **Preview / move** to drag the overlay, or **Reset session** to start fresh while keeping earlier runs and lockouts.
 - Use **Show overlay in dungeons** in the options to choose which dungeons show the overlay.
 
-Install by copying the **MaraFarm** folder into **World of Warcraft/_forever_/Interface/AddOns/**.
+## Install on WoW Forever
+
+1. Download the **MaraFarm versioned ZIP** from [GitHub Releases](https://github.com/jturnham/MaraFarm/releases/latest). GitHub's **Code → Download ZIP** and **Source code (zip)** downloads add an outer source folder.
+2. Extract the ZIP and copy its **MaraFarm** folder into `World of Warcraft/_forever_/Interface/AddOns/`. Check that `_forever_/Interface/AddOns/MaraFarm/MaraFarm.toc` exists directly inside that folder.
+3. Fully exit and restart WoW Forever, enable **MaraFarm** in the character-selection **AddOns** list, then log in and type **/mf**.
+
+If MaraFarm is missing from the AddOns list, check for an extra folder level and confirm you're launching **WoW Forever**. If it appears and **/mf** does nothing, run `/console scriptErrors 1` followed by `/reload` and capture the first MaraFarm error.
 
 See the [changelog](CHANGELOG.md) for release notes.
 
