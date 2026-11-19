@@ -94,8 +94,8 @@ local function Lockouts()
     for i = 1, PAGE_SIZE do
         local slot = slots[(page - 1) * PAGE_SIZE + i]
         if slot then
-            local provisional = slot.run.suspendedAt and " ~" or ""
-            local time = slot.active and "Inside" or UI.Duration(slot.expires - now) .. provisional
+            local provisional = (slot.run.suspendedAt or slot.run.estimatedCopy) and " ~" or ""
+            local time = (slot.active and "Inside" or UI.Duration(slot.expires - now)) .. provisional
             Row(i, slot.run.name, date("%H:%M", slot.anchor) .. "  /  " .. time)
         else
             Row(i)
@@ -103,7 +103,7 @@ local function Lockouts()
     end
     local warning = (Tracking.serverWarningUntil or 0) > now and "  |  Server reported a cap" or ""
     status:SetText(string.format("Estimated  %d / 10 used  |  %d free%s", count, math.max(0, 10 - count), warning))
-    footer:SetText(string.format("Character estimate  |  Anchor / time left  |  %d / %d", page, pages))
+    footer:SetText(string.format("Character estimate  |  Anchor / time left  |  ~ provisional  |  %d / %d", page, pages))
     local novaCount, scope, expiry = MaraFarm.Nova.Hourly(now)
     novaStatus:SetShown(novaCount ~= nil)
     if novaCount then

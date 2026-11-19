@@ -4,7 +4,8 @@ local Overlay = MaraFarm.Overlay
 local Source, Coin = MaraFarm.Source, MaraFarm.Coin
 local Rolls = MaraFarm.Rolls
 local events = CreateFrame("Frame")
-local characterKey, resetPattern, resetFields
+local characterKey
+local resetMessages = {}
 local initialWorld, reloading
 local zoneRevision = 0
 local refreshQueued = false
@@ -24,6 +25,26 @@ local function QueueRefresh(refreshCharts)
             MaraFarm.Charts.Refresh()
         end
     end)
+end
+
+local function AddResetMessage(format, success)
+    local pattern, fields = MaraFarm.MessagePattern(format)
+    if pattern and fields[1] then
+        resetMessages[#resetMessages + 1] = { pattern = pattern, name = fields[1], success = success }
+    end
+end
+
+local function ObserveReset(message)
+    local text = message:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[%w_]+:", ""):gsub("|r", "")
+    text = text:match("^%s*(.-)%s*$")
+    for _, reset in ipairs(resetMessages) do
+        local fields = { text:match(reset.pattern) }
+        local name = fields[reset.name]
+        if name then
+            Tracking.Reset(name:gsub("|H[^|]*|h([^|]+)|h", "%1"), reset.success)
+            return
+        end
+    end
 end
 
 local function ObserveWorld(revision, retries)
@@ -84,7 +105,11 @@ events:RegisterEvent("LOOT_READY")
 events:RegisterEvent("LOOT_OPENED")
 events:RegisterEvent("LOOT_CLOSED")
 events:RegisterEvent("BOSS_KILL")
+events:RegisterEvent("ENCOUNTER_START")
 events:RegisterEvent("ENCOUNTER_END")
+if ResetInstances and hooksecurefunc then
+    hooksecurefunc("ResetInstances", function() Tracking.RequestReset(GetServerTime()) end)
+end
 
 events:SetScript("OnEvent", function(_, event, ...)
     if event == "PLAYER_ENTERING_WORLD" and not characterKey then
@@ -98,7 +123,10 @@ events:SetScript("OnEvent", function(_, event, ...)
         MaraFarm.MapButton.Refresh()
         Loot.Initialize()
         Coin.Initialize()
-        resetPattern, resetFields = MaraFarm.MessagePattern(INSTANCE_RESET_SUCCESS)
+        AddResetMessage(INSTANCE_RESET_SUCCESS, true)
+        AddResetMessage(INSTANCE_RESET_FAILED, false)
+        AddResetMessage(INSTANCE_RESET_FAILED_ZONING, false)
+        AddResetMessage(INSTANCE_RESET_FAILED_OFFLINE, false)
         local _, reload = ...
         initialWorld, reloading = true, not MaraFarm.IsSecret(reload) and reload == true
     end
@@ -117,20 +145,25 @@ events:SetScript("OnEvent", function(_, event, ...)
             Tracking.serverWarningUntil = GetServerTime() + 3600
             QueueRefresh()
         end
-        if event == "CHAT_MSG_SYSTEM" and resetPattern
-            and not MaraFarm.IsSecret(message) and type(message) == "string" then
-            local captures = { message:match(resetPattern) }
-            local dungeon = captures[resetFields[1]]
-            if dungeon then Tracking.Reset(dungeon) end
+        if event == "CHAT_MSG_SYSTEM" and not MaraFarm.IsSecret(message) and type(message) == "string" then
+            ObserveReset(message)
         end
     elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
         if Source.Capture(Tracking.active) then QueueRefresh() end
     elseif event == "LOOT_CLOSED" then
         Source.Close()
-    elseif event == "BOSS_KILL" or event == "ENCOUNTER_END" then
+    elseif event == "BOSS_KILL" or event == "ENCOUNTER_START" or event == "ENCOUNTER_END" then
         local _, bossName, _, _, success = ...
-        if event == "BOSS_KILL" or (not MaraFarm.IsSecret(success) and success == 1) then
-            if Source.RecordBoss(Tracking.active, bossName) then QueueRefresh() end
+        local defeated = event == "BOSS_KILL" or (event == "ENCOUNTER_END"
+            and not MaraFarm.IsSecret(success) and success == 1)
+        if defeated or event == "ENCOUNTER_START" then
+            local previous = Tracking.active
+            Tracking.ObserveBoss(bossName, defeated)
+            if Tracking.active ~= previous then
+                Source.Clear()
+                QueueRefresh(true)
+            end
+            if defeated and Source.RecordBoss(Tracking.active, bossName) then QueueRefresh() end
         end
     elseif event == "CHAT_MSG_LOOT" then
         local run = Rolls.Chat(Tracking.active, ...)
