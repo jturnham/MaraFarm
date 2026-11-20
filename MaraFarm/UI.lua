@@ -13,6 +13,8 @@ local page, selectedRun = 1, nil
 local selectedSource
 local selectedSession, maraudonOnly = "current", nil
 local overviewValue
+local filteredRuns = {}
+local filterSource, filterCount, filterSession, filterMaraudonOnly
 
 local function Duration(seconds)
     seconds = math.floor(seconds)
@@ -42,6 +44,21 @@ UI.VendorTotal = VendorTotal
 function UI.Scope()
     if selectedSession == "current" then return Tracking.character.session, maraudonOnly end
     return selectedSession, maraudonOnly
+end
+
+local function FilterRuns(runs, session, maraudon)
+    if filterSource == runs and filterCount == #runs and filterSession == session
+        and filterMaraudonOnly == maraudon then
+        return filteredRuns
+    end
+    filterSource, filterCount, filterSession, filterMaraudonOnly = runs, #runs, session, maraudon
+    wipe(filteredRuns)
+    for _, run in ipairs(runs) do
+        if (not session or run.session == session) and (not maraudon or Tracking.IsMaraudon(run)) then
+            filteredRuns[#filteredRuns + 1] = run
+        end
+    end
+    return filteredRuns
 end
 
 local function CycleSession()
@@ -207,13 +224,7 @@ function UI.Refresh(clockOnly)
     end
     local session = UI.Scope()
     if not selectedRun and (session or maraudonOnly) then
-        entries = {}
-        for _, run in ipairs(Tracking.character.runs) do
-            if (not session or run.session == session)
-                and (not maraudonOnly or Tracking.IsMaraudon(run)) then
-                entries[#entries + 1] = run
-            end
-        end
+        entries = FilterRuns(entries, session, maraudonOnly)
     end
     local lastPage = math.max(1, math.ceil(#entries / PAGE_SIZE))
     page = math.max(1, math.min(page, lastPage))
@@ -233,7 +244,7 @@ function UI.Refresh(clockOnly)
         if selectedRun then
             empty:SetText(selectedSource and "No tracked drops from this source." or "No bosses or tracked loot recorded.")
         elseif selectedSession == "current" and Tracking.active and Tracking.active.session ~= session then
-            empty:SetText("The current dungeon stays in its earlier session. A fresh copy starts here.")
+            empty:SetText("This dungeon is still listed in its earlier session. A fresh copy starts here once identified.")
         else
             empty:SetText("No runs match this view yet.")
         end
@@ -286,6 +297,10 @@ function UI.Refresh(clockOnly)
 end
 
 function UI.ShowCurrentSession()
+    if filterSource ~= Tracking.character.runs then
+        filterSource = nil
+        wipe(filteredRuns)
+    end
     selectedSession, selectedRun, selectedSource, page = "current", nil, nil, 1
     UI.Refresh()
     MaraFarm.Charts.Refresh()

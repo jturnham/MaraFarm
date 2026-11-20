@@ -11,7 +11,7 @@ A World of Warcraft: Forever addon for tracking Maraudon and other dungeon farms
 - Use **/mf charts** for session and overall earnings per run, plus projected runs and time to reach a gold target.
 - Filter history by session or Maraudon. The movable Princess Theradras minimap button opens history or the summary.
 - Opens settings with **/mf options** or the **Options** button in run history. Use **Preview / move** to drag the overlay, or **Reset session** to start fresh while keeping earlier runs and lockouts.
-- Use **Show overlay in dungeons** in the options to choose which dungeons show the overlay.
+- Use **Tracked dungeons and overlay** to choose which dungeons are recorded. MaraFarm’s lockout estimate omits visits made while a dungeon is unchecked. **Clear all run history** removes MaraFarm history for every character after confirmation.
 
 ## Install on WoW Forever
 

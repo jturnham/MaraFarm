@@ -22,8 +22,10 @@ end
 
 function Coin.Record(run, message)
     if not run or not Coin.available then return end
+    local visit = run.visit
     if MaraFarm.IsSecret(message) then
         run.coinUnknown = true
+        if visit then visit.coinUnknown = true end
         return true
     end
     if type(message) ~= "string" then return end
@@ -42,9 +44,11 @@ function Coin.Record(run, message)
             text = text:gsub("\194\160", ""):gsub("\226\128\175", "")
             if found == 0 or text:find("[^%s,%.]") then
                 run.coinUnknown = true
+                if visit then visit.coinUnknown = true end
             else
                 if run.coin == nil then run.coinUnknown = true end
                 run.coin = (run.coin or 0) + copper
+                if visit then visit.coin = visit.coin + copper end
             end
             return true
         end

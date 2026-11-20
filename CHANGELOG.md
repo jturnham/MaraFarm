@@ -4,10 +4,22 @@ This file records user-facing changes by GitHub release tag.
 
 ## Unreleased
 
+## [0.8.0](https://github.com/jturnham/MaraFarm/releases/tag/v0.8.0) · 2026-11-20
+
+### Added
+
+- Added a confirmed option to clear MaraFarm run history for every character.
+
+### Changed
+
+- The dungeon checklist now controls run tracking as well as overlay visibility. Unchecked dungeons are omitted from MaraFarm's lockout estimate.
+- Reuses filtered run lists and vendor totals, and avoids recalculating completed-run summaries for routine loot and coin events during an active run.
+
 ### Fixed
 
 - Run History and the farm summary default to the current session after reload. Resetting selects the new session without changing older runs or hourly lockouts.
 - A dungeon copy identified after its first encounter stays in the session that was current when you entered.
+- When a re-entry is identified as a fresh copy, time, coins, boss sources, and loot already collected on that visit follow the new run, including across a UI reload.
 
 ## [0.7.1](https://github.com/jturnham/MaraFarm/releases/tag/v0.7.1) · 2026-11-19
 

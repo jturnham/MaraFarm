@@ -5,6 +5,14 @@ MaraFarm.Rolls = Rolls
 
 local pending, recent, seenHistory = {}, {}, {}
 local MATCH_SECONDS = 8
+local clearedAt
+
+function Rolls.Clear()
+    wipe(pending)
+    wipe(recent)
+    local time = C_LootHistory and C_LootHistory.GetLootHistoryTime and C_LootHistory.GetLootHistoryTime()
+    if not MaraFarm.IsSecret(time) and type(time) == "number" then clearedAt = time end
+end
 
 local function Prune(entries, now)
     for i = #entries, 1, -1 do
@@ -27,7 +35,7 @@ function Rolls.Start(run, rollID, milliseconds)
     local duration = not MaraFarm.IsSecret(milliseconds) and type(milliseconds) == "number"
         and math.max(0, milliseconds / 1000) or 60
     pending[#pending + 1] = {
-        id = rollID, key = key, run = run, quantity = quantity,
+        id = rollID, key = key, run = run, visit = run.visits, quantity = quantity,
         boss = Source.Take(run, link, quantity), expires = now + duration + MATCH_SECONDS,
     }
 end
@@ -40,12 +48,13 @@ local function Record(run, link, quantity, signal, boss)
 
     -- One loot award can produce multiple notifications in either order.
     for _, record in ipairs(recent) do
-        if record.key == key and not record.signals[signal] and (not run or record.run == run) then
+        if record.key == key and not record.signals[signal]
+            and (not run or (record.run == run and record.visit == run.visits)) then
             record.signals[signal] = true
             local entry = record.entry
             local changed
             if signal == "receipt" and entry.quantity ~= quantity then
-                entry.quantity = quantity
+                Loot.SetQuantity(record.run, entry, quantity)
                 changed = true
             end
             if boss and not entry.boss then
@@ -58,7 +67,8 @@ local function Record(run, link, quantity, signal, boss)
 
     local roll
     for i, candidate in ipairs(pending) do
-        if candidate.key == key and (signal ~= "receipt" or not run or candidate.run == run) then
+        if candidate.key == key and (signal ~= "receipt" or not run
+            or (candidate.run == run and candidate.visit == run.visits)) then
             roll = table.remove(pending, i)
             break
         end
@@ -71,10 +81,22 @@ local function Record(run, link, quantity, signal, boss)
     if not run then return end
     local entry = Loot.RecordItem(run, link, quantity, boss)
     if not entry then return end
+    if roll then entry.visit = roll.visit end
     recent[#recent + 1] = {
-        key = key, run = run, entry = entry, expires = now + MATCH_SECONDS, signals = { [signal] = true },
+        key = key, run = run, visit = entry.visit, entry = entry,
+        expires = now + MATCH_SECONDS, signals = { [signal] = true },
     }
     return run, true
+end
+
+function Rolls.MoveVisit(previous, run)
+    for _, records in ipairs({ pending, recent }) do
+        for _, record in ipairs(records) do
+            if record.run == previous and record.visit == previous.visits then
+                record.run, record.visit = run, run.visits
+            end
+        end
+    end
 end
 
 function Rolls.Chat(run, message)
@@ -105,6 +127,7 @@ local function HistoryDrop(encounterID, drop)
     key = key or drop.lootListID
     local start = drop.startTime
     if not IsNumber(key) or not IsNumber(start) then return end
+    if clearedAt and start < clearedAt then return end
 
     local id = encounterID .. ":" .. key .. ":" .. start
     if seenHistory[id] then return end
@@ -132,7 +155,7 @@ function Rolls.History(encounterID, key)
     local changed
     for _, drop in ipairs(drops) do
         local run = HistoryDrop(encounterID, drop)
-        if run then changed = run end
+        if run and (not changed or changed == Tracking.active) then changed = run end
     end
     return changed
 end

@@ -176,7 +176,7 @@ local function DungeonCheck(parent, y, labelWidth, onClick)
 end
 
 local function CreateDungeonWindow()
-    dungeonWindow = Skin.Window("MaraFarmDungeonOverlayOptions", "MaraFarm  /  Dungeon overlay", 414, 407)
+    dungeonWindow = Skin.Window("MaraFarmDungeonOverlayOptions", "MaraFarm  /  Tracked dungeons", 414, 407)
     dungeonWindow:SetParent(options)
     dungeonWindow:SetFrameStrata("DIALOG")
     dungeonWindow:SetFrameLevel(options:GetFrameLevel() + 5)
@@ -185,9 +185,11 @@ local function CreateDungeonWindow()
         Overlay.Refresh()
     end)
     dungeonMaster.label:SetText("Enable overlay")
+    Skin.Text(dungeonWindow, "GameFontHighlightSmall", 20, -83, 374, Skin.muted):SetText("Only checked dungeons are tracked.")
     local function SelectAll(enabled)
         Dungeons.SetAll(enabled)
         RefreshDungeonRows()
+        MaraFarm.UpdateDungeonTracking()
         Overlay.Refresh()
     end
     Skin.Button(dungeonWindow, "Select all", 78, 222, 320, function() SelectAll(true) end)
@@ -196,6 +198,7 @@ local function CreateDungeonWindow()
     for i = 1, DUNGEONS_PER_PAGE do
         dungeonRows[i] = DungeonCheck(dungeonWindow, -102 - (i - 1) * 28, 322, function(self)
             Dungeons.SetEnabled(self.mapID, not not self:GetChecked())
+            MaraFarm.UpdateDungeonTracking()
             Overlay.Refresh()
         end)
     end
@@ -249,7 +252,7 @@ local function CreateOptions()
     options:SetFrameStrata("DIALOG")
     Skin.Band(options, 63, 25, 18, Skin.surface)
     Skin.Text(options, "GameFontHighlightSmall", 28, -71, 355, Skin.accent):SetText("Dungeon overlay")
-    Skin.Button(options, "Show overlay in dungeons  >", 374, 20, 285, ToggleDungeonWindow, true)
+    Skin.Button(options, "Tracked dungeons and overlay  >", 374, 20, 285, ToggleDungeonWindow, true)
     Check("Show estimated vendor value", "vendor", -121, Overlay.settings, Overlay.Refresh)
     Check("Show estimated hourly lockout count", "lockout", -150, Overlay.settings, Overlay.Refresh)
     Check("Show live run gold per hour", "gph", -179, Overlay.settings, Overlay.Refresh)
@@ -278,6 +281,9 @@ local function CreateOptions()
     Skin.Button(options, "Reset session", 128, 20, 18, function()
         StaticPopup_Show("MARAFARM_NEW_SESSION")
     end)
+    Skin.Button(options, "Clear all run history", 164, 158, 18, function()
+        StaticPopup_Show("MARAFARM_CLEAR_HISTORY")
+    end)
 end
 
 StaticPopupDialogs.MARAFARM_NEW_SESSION = {
@@ -291,6 +297,19 @@ StaticPopupDialogs.MARAFARM_NEW_SESSION = {
         Tracking.NewSession()
         UI.ShowCurrentSession()
         MaraFarm.Dashboard.Refresh()
+        RefreshOptions()
+    end,
+}
+
+StaticPopupDialogs.MARAFARM_CLEAR_HISTORY = {
+    text = "Permanently clear all MaraFarm run history? This will wipe all historical data for every character, including runs, loot, session totals, and MaraFarm's hourly lockout records. If you are in a tracked dungeon, a new partial run will start.",
+    button1 = "Clear all history",
+    button2 = CANCEL,
+    timeout = 0,
+    hideOnEscape = true,
+    whileDead = true,
+    OnAccept = function()
+        MaraFarm.ClearHistory()
         RefreshOptions()
     end,
 }

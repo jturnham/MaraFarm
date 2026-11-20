@@ -19,6 +19,14 @@ local function NewRun(instance, entered, partial)
     return run
 end
 
+local function NewVisit(run, entered, session)
+    return {
+        entered = entered, session = session, seconds = 0,
+        coin = 0, previousHadCoin = run.coin ~= nil,
+        previousCoinUnknown = run.coinUnknown, previousPartial = run.partial,
+    }
+end
+
 function Tracking.Initialize(db, characterKey)
     db = db or { version = 1, characters = {} }
     local character = db.characters[characterKey]
@@ -34,6 +42,7 @@ function Tracking.Initialize(db, characterKey)
     if db.overlay.gph == nil then db.overlay.gph = true end
     db.minimap = db.minimap or { enabled = true, angle = 225 }
     Tracking.character = character
+    Tracking.characterKey = characterKey
     Tracking.active = nil
     Tracking.started = nil
     Tracking.lastExited = nil
@@ -59,11 +68,15 @@ end
 function Tracking.Leave(now, tick, suspend)
     local run = Tracking.active
     if not run then return end
-    run.seconds = Tracking.Duration(run, tick)
+    local seconds = math.max(0, tick - Tracking.started)
+    run.seconds = run.seconds + seconds
     if suspend then
+        local visit = run.visit
+        if visit then visit.seconds = visit.seconds + seconds end
         run.suspendedAt = now
         Tracking.character.suspended = run.key
     else
+        run.visit = nil
         run.lastExit = now
         run.suspendedAt = nil
         Tracking.lastExited = run
@@ -78,10 +91,16 @@ function Tracking.Observe(instance, now, tick, initial, reload)
     Tracking.Leave(now, tick)
     local character = Tracking.character
     local suspendedKey = character.suspended
+    local resume
     if suspendedKey then
         local suspendedRun = character.runs[character.copies[suspendedKey]]
-        if suspendedRun and not (reload and instance and instance.key == suspendedKey) then
+        if suspendedRun and reload and instance and instance.key == suspendedKey then
+            resume = suspendedRun
+        elseif suspendedRun then
             suspendedRun.partial = true
+            suspendedRun.lastExit = suspendedRun.suspendedAt or suspendedRun.lastExit
+            suspendedRun.suspendedAt = nil
+            suspendedRun.visit = nil
         end
         character.suspended = nil
     end
@@ -89,29 +108,43 @@ function Tracking.Observe(instance, now, tick, initial, reload)
 
     local run = character.runs[character.copies[instance.key]]
     local request = Tracking.resetRequest
-    Tracking.resetRequest = nil
-    if run and request and request.run == run and now - request.time <= 300 then
+    if request and (request.run.key == instance.key or now - request.time > 300) then
+        Tracking.resetRequest = nil
+    end
+    if run and not resume and request and request.run == run and now - request.time <= 300 then
         run = NewRun(instance, now, initial)
         run.estimatedCopy = true
     end
     if not run then
         run = NewRun(instance, now, initial)
     end
-    if not (reload and suspendedKey == instance.key) then
+    if run ~= resume then
         run.visits = run.visits + 1
-        run.visitSession = character.session
+        run.visit = NewVisit(run, now, character.session)
         if initial then run.partial = true end
     end
     run.suspendedAt = nil
     Tracking.recent[run] = true
     Tracking.active = run
     Tracking.started = tick
-    Tracking.visitEntered = now
+    -- Older saved runs have no visit snapshot. Preserve their committed totals.
+    if not run.visit then
+        run.visit = NewVisit(run, now, run.visitSession or run.session)
+    end
 end
 
 function Tracking.NewSession()
     local character = Tracking.character
     character.session = character.session + 1
+end
+
+function Tracking.ClearHistory(db)
+    wipe(db.characters)
+    local character = { runs = {}, copies = {}, session = 1 }
+    db.characters[Tracking.characterKey] = character
+    Tracking.character = character
+    Tracking.active, Tracking.started, Tracking.lastExited, Tracking.resetRequest = nil, nil, nil, nil
+    wipe(Tracking.recent)
 end
 
 local function NameKey(name)
@@ -145,12 +178,20 @@ function Tracking.ObserveBoss(name, defeated)
     if not run or MaraFarm.IsSecret(name) or type(name) ~= "string" or name == "" then return end
     local prior = run.defeatedBosses and run.defeatedBosses[name]
     if prior and prior < run.visits then
-        -- This visit belongs to a new copy. Keep the old run and its exit anchor.
-        run.visits = run.visits - 1
-        local visitSession = run.visitSession or run.session
-        run = NewRun(run, Tracking.visitEntered, false)
-        run.session, run.visitSession = visitSession, visitSession
-        run.visits = 1
+        local previous, visit = run, run.visit
+        run = NewRun(previous, visit.entered, false)
+        run.session, run.visits, run.visit = visit.session, 1, visit
+        run.seconds, run.coin, run.coinUnknown = visit.seconds, visit.coin, visit.coinUnknown
+        previous.seconds = previous.seconds - visit.seconds
+        if previous.coin then previous.coin = previous.coin - visit.coin end
+        if not visit.previousHadCoin then previous.coin = nil end
+        previous.coinUnknown, previous.partial = visit.previousCoinUnknown, visit.previousPartial
+        visit.previousHadCoin, visit.previousCoinUnknown, visit.previousPartial = true, nil, nil
+        MaraFarm.Loot.MoveVisit(previous, run)
+        MaraFarm.Rolls.MoveVisit(previous, run)
+        MaraFarm.Source.MoveVisit(previous, run)
+        previous.visits = previous.visits - 1
+        previous.visit = nil
         Tracking.active = run
         Tracking.recent[run] = true
     end

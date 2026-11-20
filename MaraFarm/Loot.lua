@@ -1,6 +1,7 @@
 local _, MaraFarm = ...
 local Loot = {}
 MaraFarm.Loot = Loot
+local totals = setmetatable({}, { __mode = "k" })
 
 local trackedQualities = {
     [2] = "1eff00", -- Uncommon
@@ -107,6 +108,7 @@ function Loot.ApplyItemInfo(run, entry, request, quality, price)
         return
     end
     if quality and not trackedQualities[quality] then
+        totals[run] = nil
         for i, candidate in ipairs(run.loot) do
             if candidate == entry then table.remove(run.loot, i); break end
         end
@@ -117,6 +119,7 @@ function Loot.ApplyItemInfo(run, entry, request, quality, price)
         entry.link = "|cff" .. trackedQualities[quality] .. entry.link .. "|r"
     end
     if quality and type(price) == "number" then
+        totals[run] = nil
         entry.unitPrice = price
         entry.unavailable = nil
         return
@@ -158,14 +161,41 @@ function Loot.RecordItem(run, link, quantity, boss)
         itemID = tonumber(link:match("|Hitem:(%d+)")),
         quantity = quantity,
         quality = recordedQuality,
+        visit = run.visits,
         boss = boss or MaraFarm.Source.Take(run, link, quantity),
     }
     run.loot[#run.loot + 1] = entry
+    totals[run] = nil
     Loot.ApplyItemInfo(run, entry, true, quality, price)
     return entry
 end
 
+function Loot.MoveVisit(previous, run)
+    totals[previous], totals[run] = nil, nil
+    local kept = 0
+    for _, entry in ipairs(previous.loot) do
+        if entry.visit == previous.visits then
+            entry.visit = run.visits
+            run.loot[#run.loot + 1] = entry
+            for _, pending in ipairs(Loot.pending[entry.itemID] or {}) do
+                if pending.entry == entry then pending.run = run end
+            end
+        else
+            kept = kept + 1
+            previous.loot[kept] = entry
+        end
+    end
+    for index = #previous.loot, kept + 1, -1 do previous.loot[index] = nil end
+end
+
+function Loot.SetQuantity(run, entry, quantity)
+    entry.quantity = quantity
+    totals[run] = nil
+end
+
 function Loot.Total(run)
+    local cached = totals[run]
+    if cached then return cached.copper, cached.unresolved end
     local copper, unresolved = 0, 0
     for _, entry in ipairs(run.loot) do
         if entry.unitPrice ~= nil then
@@ -174,5 +204,6 @@ function Loot.Total(run)
             unresolved = unresolved + entry.quantity
         end
     end
+    totals[run] = { copper = copper, unresolved = unresolved }
     return copper, unresolved
 end

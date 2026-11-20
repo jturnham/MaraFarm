@@ -1,5 +1,6 @@
 local addonName, MaraFarm = ...
 local Tracking, Loot, UI = MaraFarm.Tracking, MaraFarm.Loot, MaraFarm.UI
+local Dungeons = MaraFarm.Dungeons
 local Overlay = MaraFarm.Overlay
 local Source, Coin = MaraFarm.Source, MaraFarm.Coin
 local Rolls = MaraFarm.Rolls
@@ -7,21 +8,23 @@ local events = CreateFrame("Frame")
 local characterKey
 local resetMessages = {}
 local initialWorld, reloading
+local excludedDungeon
 local zoneRevision = 0
 local refreshQueued = false
-local chartRefreshQueued = false
+local historyRefreshQueued = false
 
-local function QueueRefresh(refreshCharts)
-    chartRefreshQueued = chartRefreshQueued or refreshCharts
+local function QueueRefresh(refreshHistory)
+    historyRefreshQueued = historyRefreshQueued or refreshHistory
     if refreshQueued then return end
     refreshQueued = true
     C_Timer.After(0, function()
         refreshQueued = false
+        local refreshHistory = historyRefreshQueued
+        historyRefreshQueued = false
         UI.Refresh()
         Overlay.Refresh()
-        MaraFarm.Dashboard.Refresh()
-        if chartRefreshQueued then
-            chartRefreshQueued = false
+        MaraFarm.Dashboard.Refresh(not refreshHistory)
+        if refreshHistory then
             MaraFarm.Charts.Refresh()
         end
     end)
@@ -66,25 +69,44 @@ local function ObserveWorld(revision, retries)
             return
         end
         instance = { key = mapID .. ":" .. difficulty, name = name }
+        Overlay.RememberDungeon(instance)
+        if not Dungeons.IsEnabled(mapID) then instance = nil end
     end
 
     local previous = Tracking.active
+    excludedDungeon = inside and instanceType == "party" and not instance
     Tracking.Observe(instance, GetServerTime(), GetTime(), initialWorld, reloading)
     initialWorld, reloading = nil, nil
     if Tracking.active ~= previous then
         if Tracking.active then
             Source.Clear()
-            Overlay.RememberDungeon(Tracking.active)
         else
             Source.Close()
         end
         QueueRefresh(true)
     end
+    if excludedDungeon then Source.Clear() end
 end
 
 local function UpdateWorld()
     zoneRevision = zoneRevision + 1
     ObserveWorld(zoneRevision, 5)
+end
+
+function MaraFarm.UpdateDungeonTracking()
+    initialWorld = true
+    UpdateWorld()
+end
+
+function MaraFarm.ClearHistory()
+    Tracking.ClearHistory(MaraFarmDB)
+    wipe(Loot.pending)
+    Rolls.Clear()
+    Source.Clear()
+    reloading = nil
+    MaraFarm.UpdateDungeonTracking()
+    UI.ShowCurrentSession()
+    QueueRefresh(true)
 end
 
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -160,17 +182,16 @@ events:SetScript("OnEvent", function(_, event, ...)
             local previous = Tracking.active
             Tracking.ObserveBoss(bossName, defeated)
             if Tracking.active ~= previous then
-                Source.Clear()
                 QueueRefresh(true)
             end
             if defeated and Source.RecordBoss(Tracking.active, bossName) then QueueRefresh() end
         end
-    elseif event == "CHAT_MSG_LOOT" then
+    elseif event == "CHAT_MSG_LOOT" and not excludedDungeon then
         local run = Rolls.Chat(Tracking.active, ...)
         if run then QueueRefresh(run ~= Tracking.active) end
     elseif event == "START_LOOT_ROLL" then
         Rolls.Start(Tracking.active, ...)
-    elseif event == "LOOT_HISTORY_UPDATE_DROP" or event == "LOOT_HISTORY_UPDATE_ENCOUNTER" then
+    elseif not excludedDungeon and (event == "LOOT_HISTORY_UPDATE_DROP" or event == "LOOT_HISTORY_UPDATE_ENCOUNTER") then
         local run = Rolls.History(...)
         if run then QueueRefresh(run ~= Tracking.active) end
     elseif event == "CHAT_MSG_MONEY" then

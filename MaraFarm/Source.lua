@@ -19,9 +19,23 @@ local snapshot
 function Source.RecordBoss(run, name)
     if not run or MaraFarm.IsSecret(name) or type(name) ~= "string" or name == "" then return end
     run.bosses = run.bosses or {}
+    if run.visit then
+        local visit = run.visit
+        visit.bosses = visit.bosses or {}
+        if visit.bosses[name] == nil then visit.bosses[name] = run.bosses[name] == nil end
+    end
     if run.bosses[name] then return end
     run.bosses[name] = true
     return true
+end
+
+function Source.MoveVisit(previous, run)
+    if snapshot and snapshot.run == previous then snapshot.run = run end
+    for name, added in pairs(run.visit.bosses or {}) do
+        if added then previous.bosses[name] = nil end
+        run.bosses = run.bosses or {}
+        run.bosses[name] = true
+    end
 end
 
 local function BossName(run, ok, guid, _, extraGUID)
